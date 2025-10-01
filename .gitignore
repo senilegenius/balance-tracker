@@ -1,0 +1,19 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/settings.json
+*.swp
+*.swo
+
+# Temporary files
+*.tmp
+*.temp
+
+# Keep config.js out of git (generated during build)
+config.js
+
+# But allow template and build files
+!config.template.js
+!build.sh
