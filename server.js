@@ -1,4 +1,6 @@
 // plaid-server.js
+require('dotenv').config();
+
 const express = require('express');
 const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid');
 const fs = require('fs').promises;
