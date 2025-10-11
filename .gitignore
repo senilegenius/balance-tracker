@@ -13,6 +13,9 @@ Thumbs.db
 
 # Keep config.js out of git (generated during build)
 config.js
+node_modules/
+.env
+plaid-token.json
 
 # But allow template and build files
 !config.template.js
