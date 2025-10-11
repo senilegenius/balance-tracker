@@ -113,8 +113,8 @@ app.listen(PORT, () => {
   console.log('\n📝 Setup instructions:');
   console.log('1. Sign up at https://dashboard.plaid.com/signup');
   console.log('2. Get your Client ID and Secret from the Keys page');
-  console.log('3. Set environment variables:');
-  console.log('   export PLAID_CLIENT_ID=your_client_id');
-  console.log('   export PLAID_SECRET=your_sandbox_secret');
+  console.log('3. Create a .env file with:');
+  console.log('   PLAID_CLIENT_ID=your_client_id');
+  console.log('   PLAID_SECRET=your_sandbox_secret');
   console.log('4. Open http://localhost:3000 in your browser\n');
 });
