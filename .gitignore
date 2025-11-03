@@ -1,6 +1,7 @@
 # OS files
 .DS_Store
 Thumbs.db
+PostgreSQL Setup Guide.pdf
 
 # Editor files
 .vscode/settings.json

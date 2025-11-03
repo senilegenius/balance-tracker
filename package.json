@@ -1,14 +1,18 @@
 {
   "name": "my-balance-tracker",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "db:setup": "psql balance_tracker < db/schema.sql && psql balance_tracker < db/load-test-data.sql",
+    "db:reset": "psql balance_tracker < db/schema.sql",
+    "db:load": "psql balance_tracker < db/load-test-data.sql",
+    "db:migrate": "psql balance_tracker < db/add-exchange-rates.sql",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "Balance tracker using Plaid API",
   "dependencies": {
     "dotenv": "^17.2.3",
     "express": "^5.1.0",

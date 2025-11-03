@@ -2,6 +2,7 @@
 DROP TABLE IF EXISTS balance_snapshots CASCADE;
 DROP TABLE IF EXISTS accounts CASCADE;
 DROP TABLE IF EXISTS plaid_items CASCADE;
+DROP TABLE IF EXISTS exchange_rates CASCADE;
 
 -- Enable pgcrypto extension for encryption
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -40,10 +41,21 @@ CREATE TABLE balance_snapshots (
   UNIQUE(account_id, date)  -- Only one snapshot per account per day
 );
 
+-- Table: exchange_rates (currency conversion rates)
+CREATE TABLE exchange_rates (
+  id SERIAL PRIMARY KEY,
+  from_currency VARCHAR(3) NOT NULL,
+  to_currency VARCHAR(3) NOT NULL,
+  rate DECIMAL(10, 6) NOT NULL,
+  updated_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(from_currency, to_currency)
+);
+
 -- Create indexes for better query performance
 CREATE INDEX idx_balance_snapshots_account_date ON balance_snapshots(account_id, date);
 CREATE INDEX idx_accounts_institution ON accounts(institution_name);
 CREATE INDEX idx_accounts_active ON accounts(is_active);
+CREATE INDEX idx_exchange_rates_currencies ON exchange_rates(from_currency, to_currency);
 
 -- Helper functions for encrypting/decrypting access tokens
 -- These will be used in your Node.js code
