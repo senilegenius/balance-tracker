@@ -243,6 +243,20 @@ app.get('/api/historical_balances', async (req, res) => {
 // Get summary calculations
 app.get('/api/summary', async (req, res) => {
   try {
+    // Get exchange rate from database
+    const exchangeRateResult = await pool.query(`
+      SELECT rate FROM exchange_rates
+      WHERE from_currency = 'USD' AND to_currency = 'CAD'
+    `);
+
+    if (exchangeRateResult.rows.length === 0) {
+      return res.status(500).json({
+        error: 'Exchange rate not found. Please ensure exchange_rates table is populated.'
+      });
+    }
+
+    const usdToCad = parseFloat(exchangeRateResult.rows[0].rate);
+
     // Get the latest date
     const latestDateResult = await pool.query(`
       SELECT MAX(date) as latest_date FROM balance_snapshots
@@ -281,9 +295,6 @@ app.get('/api/summary', async (req, res) => {
       WHERE b.date = $1 AND a.is_active = true
     `, [previousDate]);
 
-    // Get USD to CAD conversion rate (you'll want to get this from an API later)
-    const usdToCad = 1.40225; // Hardcoded for now, matches your spreadsheet
-
     const current = currentTotals.rows[0];
     const previous = previousTotals.rows[0];
 
@@ -300,7 +311,7 @@ app.get('/api/summary', async (req, res) => {
       Math.abs(parseFloat(previous.cc_debt_cad)) -
       (Math.abs(parseFloat(previous.cc_debt_usd)) * usdToCad) : null;
 
-    const liquidChange = previousLiquidCad !== null ? 
+    const liquidChange = previousLiquidCad !== null ?
       currentLiquidCad - previousLiquidCad : 0;
 
     res.json({
@@ -379,13 +390,13 @@ app.post('/api/create_link_token', async (req, res) => {
 // Exchange public token for access token and save to database
 app.post('/api/exchange_public_token', async (req, res) => {
   const { public_token } = req.body;
-  
+
   try {
     // Exchange token with Plaid
     const response = await plaidClient.itemPublicTokenExchange({
       public_token: public_token,
     });
-    
+
     const accessToken = response.data.access_token;
     const itemId = response.data.item_id;
 
@@ -441,7 +452,7 @@ app.post('/api/exchange_public_token', async (req, res) => {
         itemId
       ]);
     }
-    
+
     res.json({ success: true });
   } catch (error) {
     console.error('Error exchanging token:', error);
@@ -458,10 +469,10 @@ app.post('/api/refresh_balances', async (req, res) => {
       FROM plaid_items
       WHERE access_token_encrypted IS NOT NULL
     `);
-    
+
     const today = new Date().toISOString().split('T')[0];
     let accountsUpdated = 0;
-    
+
     for (const item of itemsResult.rows) {
       try {
         // Decrypt access token
@@ -515,6 +526,7 @@ const PORT = 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
   console.log('\n📊 Available endpoints:');
+  console.log('   GET  /api/exchange_rate - Get USD/CAD exchange rate');
   console.log('   GET  /api/accounts - List all accounts');
   console.log('   GET  /api/latest_balances - Current balances');
   console.log('   GET  /api/historical_balances - All balance history');
