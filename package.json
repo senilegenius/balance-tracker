@@ -4,10 +4,11 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "db:setup": "psql balance_tracker < db/schema.sql && psql balance_tracker < db/load-test-data.sql",
+    "db:setup": "psql balance_tracker < db/schema.sql && psql balance_tracker < db/load_test_data.sql && node db/refresh_exchange_rate.js",
     "db:reset": "psql balance_tracker < db/schema.sql",
-    "db:load": "psql balance_tracker < db/load-test-data.sql",
-    "db:migrate": "psql balance_tracker < db/add-exchange-rates.sql",
+    "db:load": "psql balance_tracker < db/load_test_data.sql",
+    "db:migrate": "psql balance_tracker < db/add_exchange_rates.sql",
+    "db:refresh-rate": "node db/refresh_exchange_rate.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
