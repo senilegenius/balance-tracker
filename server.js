@@ -58,6 +58,105 @@ async function decryptToken(encryptedToken) {
 // DATABASE API ENDPOINTS
 // ===========================================
 
+// Get exchange rate (with automatic refresh if stale)
+app.get('/api/exchange_rate', async (req, res) => {
+  try {
+    const fromCurrency = req.query.from || 'USD';
+    const toCurrency = req.query.to || 'CAD';
+
+    // Get current rate from database
+    const result = await pool.query(`
+      SELECT rate, updated_at
+      FROM exchange_rates
+      WHERE from_currency = $1 AND to_currency = $2
+    `, [fromCurrency, toCurrency]);
+
+    let rate;
+    let updatedAt;
+    let wasRefreshed = false;
+
+    if (result.rows.length === 0) {
+      // No rate exists, fetch from API
+      console.log(`No ${fromCurrency}→${toCurrency} rate found, fetching from API...`);
+      rate = await fetchExchangeRateFromAPI(fromCurrency, toCurrency);
+      updatedAt = new Date();
+      wasRefreshed = true;
+
+      // Save to database
+      await pool.query(`
+        INSERT INTO exchange_rates (from_currency, to_currency, rate, updated_at)
+        VALUES ($1, $2, $3, $4)
+      `, [fromCurrency, toCurrency, rate, updatedAt]);
+
+    } else {
+      rate = parseFloat(result.rows[0].rate);
+      updatedAt = result.rows[0].updated_at;
+
+      // Check if rate is stale (older than 24 hours)
+      const ageInHours = (Date.now() - new Date(updatedAt).getTime()) / (1000 * 60 * 60);
+
+      if (ageInHours > 24) {
+        console.log(`${fromCurrency}→${toCurrency} rate is ${ageInHours.toFixed(1)} hours old, refreshing...`);
+
+        try {
+          // Fetch new rate from API
+          const newRate = await fetchExchangeRateFromAPI(fromCurrency, toCurrency);
+          rate = newRate;
+          updatedAt = new Date();
+          wasRefreshed = true;
+
+          // Update database
+          await pool.query(`
+            UPDATE exchange_rates
+            SET rate = $1, updated_at = $2
+            WHERE from_currency = $3 AND to_currency = $4
+          `, [rate, updatedAt, fromCurrency, toCurrency]);
+
+        } catch (error) {
+          console.error('Error refreshing exchange rate, using cached rate:', error);
+          // Continue with cached rate if API fails
+        }
+      }
+    }
+
+    res.json({
+      fromCurrency,
+      toCurrency,
+      rate,
+      updatedAt,
+      wasRefreshed
+    });
+
+  } catch (error) {
+    console.error('Error getting exchange rate:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function to fetch exchange rate from external API
+async function fetchExchangeRateFromAPI(fromCurrency, toCurrency) {
+  try {
+    // Using exchangerate-api.com (free, no API key needed for basic usage)
+    const response = await fetch(`https://api.exchangerate-api.com/v4/latest/${fromCurrency}`);
+
+    if (!response.ok) {
+      throw new Error(`Exchange rate API returned ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.rates || !data.rates[toCurrency]) {
+      throw new Error(`Exchange rate for ${fromCurrency}→${toCurrency} not found`);
+    }
+
+    return parseFloat(data.rates[toCurrency]);
+
+  } catch (error) {
+    console.error('Error fetching from exchange rate API:', error);
+    throw error;
+  }
+}
+
 // Get all accounts
 app.get('/api/accounts', async (req, res) => {
   try {
