@@ -54,6 +54,30 @@ async function decryptToken(encryptedToken) {
   return result.rows[0].decrypted;
 }
 
+// Helper function to fetch exchange rate from external API
+async function fetchExchangeRateFromAPI(fromCurrency, toCurrency) {
+  try {
+    // Using exchangerate-api.com (free, no API key needed for basic usage)
+    const response = await fetch(`https://api.exchangerate-api.com/v4/latest/${fromCurrency}`);
+
+    if (!response.ok) {
+      throw new Error(`Exchange rate API returned ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.rates || !data.rates[toCurrency]) {
+      throw new Error(`Exchange rate for ${fromCurrency}→${toCurrency} not found`);
+    }
+
+    return parseFloat(data.rates[toCurrency]);
+
+  } catch (error) {
+    console.error('Error fetching from exchange rate API:', error);
+    throw error;
+  }
+}
+
 // ===========================================
 // DATABASE API ENDPOINTS
 // ===========================================
@@ -132,30 +156,6 @@ app.get('/api/exchange_rate', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-// Helper function to fetch exchange rate from external API
-async function fetchExchangeRateFromAPI(fromCurrency, toCurrency) {
-  try {
-    // Using exchangerate-api.com (free, no API key needed for basic usage)
-    const response = await fetch(`https://api.exchangerate-api.com/v4/latest/${fromCurrency}`);
-
-    if (!response.ok) {
-      throw new Error(`Exchange rate API returned ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    if (!data.rates || !data.rates[toCurrency]) {
-      throw new Error(`Exchange rate for ${fromCurrency}→${toCurrency} not found`);
-    }
-
-    return parseFloat(data.rates[toCurrency]);
-
-  } catch (error) {
-    console.error('Error fetching from exchange rate API:', error);
-    throw error;
-  }
-}
 
 // Get all accounts
 app.get('/api/accounts', async (req, res) => {
@@ -338,6 +338,20 @@ app.get('/api/summary', async (req, res) => {
 // Get balance history for trend chart
 app.get('/api/trend_data', async (req, res) => {
   try {
+    // Get exchange rate from database
+    const exchangeRateResult = await pool.query(`
+      SELECT rate FROM exchange_rates
+      WHERE from_currency = 'USD' AND to_currency = 'CAD'
+    `);
+
+    if (exchangeRateResult.rows.length === 0) {
+      return res.status(500).json({
+        error: 'Exchange rate not found. Please ensure exchange_rates table is populated.'
+      });
+    }
+
+    const usdToCad = parseFloat(exchangeRateResult.rows[0].rate);
+
     const result = await pool.query(`
       WITH daily_totals AS (
         SELECT
@@ -354,10 +368,10 @@ app.get('/api/trend_data', async (req, res) => {
       )
       SELECT
         date,
-        total_cad + (total_usd * 1.40225) - ABS(cc_debt_cad) - (ABS(cc_debt_usd) * 1.40225) as liquid_cash_cad
+        total_cad + (total_usd * $1) - ABS(cc_debt_cad) - (ABS(cc_debt_usd) * $1) as liquid_cash_cad
       FROM daily_totals
       ORDER BY date
-    `);
+    `, [usdToCad]);
 
     res.json(result.rows);
   } catch (error) {
