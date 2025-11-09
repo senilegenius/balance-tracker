@@ -243,20 +243,6 @@ app.get('/api/historical_balances', async (req, res) => {
 // Get summary calculations
 app.get('/api/summary', async (req, res) => {
   try {
-    // Get exchange rate from database
-    const exchangeRateResult = await pool.query(`
-      SELECT rate FROM exchange_rates
-      WHERE from_currency = 'USD' AND to_currency = 'CAD'
-    `);
-
-    if (exchangeRateResult.rows.length === 0) {
-      return res.status(500).json({
-        error: 'Exchange rate not found. Please ensure exchange_rates table is populated.'
-      });
-    }
-
-    const usdToCad = parseFloat(exchangeRateResult.rows[0].rate);
-
     // Get the latest date
     const latestDateResult = await pool.query(`
       SELECT MAX(date) as latest_date FROM balance_snapshots
@@ -270,6 +256,26 @@ app.get('/api/summary', async (req, res) => {
       WHERE date < $1
     `, [latestDate]);
     const previousDate = previousDateResult.rows[0].previous_date;
+
+    // Get exchange rate for latest date (from any snapshot on that date)
+    const latestRateResult = await pool.query(`
+      SELECT usd_to_cad_rate
+      FROM balance_snapshots
+      WHERE date = $1
+      LIMIT 1
+    `, [latestDate]);
+
+    // Get exchange rate for previous date
+    const previousRateResult = await pool.query(`
+      SELECT usd_to_cad_rate
+      FROM balance_snapshots
+      WHERE date = $1
+      LIMIT 1
+    `, [previousDate]);
+
+    const currentRate = parseFloat(latestRateResult.rows[0].usd_to_cad_rate);
+    const previousRate = previousRateResult.rows.length > 0 ?
+      parseFloat(previousRateResult.rows[0].usd_to_cad_rate) : currentRate;
 
     // Calculate totals for latest date
     const currentTotals = await pool.query(`
@@ -298,18 +304,18 @@ app.get('/api/summary', async (req, res) => {
     const current = currentTotals.rows[0];
     const previous = previousTotals.rows[0];
 
-    // Calculate liquid cash (all assets minus CC debt, converted to CAD)
+    // Calculate liquid cash using the rate from that date
     const currentLiquidCad =
       parseFloat(current.total_cad) +
-      (parseFloat(current.total_usd) * usdToCad) -
+      (parseFloat(current.total_usd) * currentRate) -
       Math.abs(parseFloat(current.cc_debt_cad)) -
-      (Math.abs(parseFloat(current.cc_debt_usd)) * usdToCad);
+      (Math.abs(parseFloat(current.cc_debt_usd)) * currentRate);
 
     const previousLiquidCad = previous.total_cad !== null ?
       parseFloat(previous.total_cad) +
-      (parseFloat(previous.total_usd) * usdToCad) -
+      (parseFloat(previous.total_usd) * previousRate) -
       Math.abs(parseFloat(previous.cc_debt_cad)) -
-      (Math.abs(parseFloat(previous.cc_debt_usd)) * usdToCad) : null;
+      (Math.abs(parseFloat(previous.cc_debt_usd)) * previousRate) : null;
 
     const liquidChange = previousLiquidCad !== null ?
       currentLiquidCad - previousLiquidCad : 0;
@@ -317,7 +323,7 @@ app.get('/api/summary', async (req, res) => {
     res.json({
       date: latestDate,
       previousDate: previousDate,
-      usdToCadRate: usdToCad,
+      usdToCadRate: currentRate,
       totalCad: parseFloat(current.total_cad),
       totalUsd: parseFloat(current.total_usd),
       ccDebtCad: Math.abs(parseFloat(current.cc_debt_cad)),
@@ -338,24 +344,11 @@ app.get('/api/summary', async (req, res) => {
 // Get balance history for trend chart
 app.get('/api/trend_data', async (req, res) => {
   try {
-    // Get exchange rate from database
-    const exchangeRateResult = await pool.query(`
-      SELECT rate FROM exchange_rates
-      WHERE from_currency = 'USD' AND to_currency = 'CAD'
-    `);
-
-    if (exchangeRateResult.rows.length === 0) {
-      return res.status(500).json({
-        error: 'Exchange rate not found. Please ensure exchange_rates table is populated.'
-      });
-    }
-
-    const usdToCad = parseFloat(exchangeRateResult.rows[0].rate);
-
     const result = await pool.query(`
       WITH daily_totals AS (
         SELECT
           b.date,
+          MAX(b.usd_to_cad_rate) as rate,
           SUM(CASE WHEN a.currency = 'CAD' AND a.is_liability = false AND a.account_type != 'credit' THEN b.balance ELSE 0 END) as total_cad,
           SUM(CASE WHEN a.currency = 'USD' AND a.is_liability = false AND a.account_type != 'credit' THEN b.balance ELSE 0 END) as total_usd,
           SUM(CASE WHEN a.currency = 'CAD' AND a.account_type = 'credit' THEN b.balance ELSE 0 END) as cc_debt_cad,
@@ -368,10 +361,10 @@ app.get('/api/trend_data', async (req, res) => {
       )
       SELECT
         date,
-        total_cad + (total_usd * $1) - ABS(cc_debt_cad) - (ABS(cc_debt_usd) * $1) as liquid_cash_cad
+        total_cad + (total_usd * rate) - ABS(cc_debt_cad) - (ABS(cc_debt_usd) * rate) as liquid_cash_cad
       FROM daily_totals
       ORDER BY date
-    `, [usdToCad]);
+    `);
 
     res.json(result.rows);
   } catch (error) {
@@ -477,6 +470,15 @@ app.post('/api/exchange_public_token', async (req, res) => {
 // Refresh balances from Plaid and save to database
 app.post('/api/refresh_balances', async (req, res) => {
   try {
+    // Get current exchange rate
+    const exchangeRateResult = await pool.query(`
+      SELECT rate FROM exchange_rates
+      WHERE from_currency = 'USD' AND to_currency = 'CAD'
+    `);
+
+    const currentRate = exchangeRateResult.rows.length > 0 ?
+      parseFloat(exchangeRateResult.rows[0].rate) : 1.40225;
+
     // Get all Plaid items
     const itemsResult = await pool.query(`
       SELECT id, plaid_item_id, access_token_encrypted
@@ -497,7 +499,7 @@ app.post('/api/refresh_balances', async (req, res) => {
           access_token: accessToken,
         });
 
-        // Save each balance
+        // Save each balance with the current exchange rate
         for (const account of balancesResponse.data.accounts) {
           const accountResult = await pool.query(`
             SELECT id FROM accounts WHERE plaid_account_id = $1
@@ -507,11 +509,11 @@ app.post('/api/refresh_balances', async (req, res) => {
             const accountId = accountResult.rows[0].id;
 
             await pool.query(`
-              INSERT INTO balance_snapshots (account_id, balance, date)
-              VALUES ($1, $2, $3)
+              INSERT INTO balance_snapshots (account_id, balance, date, usd_to_cad_rate)
+              VALUES ($1, $2, $3, $4)
               ON CONFLICT (account_id, date)
-              DO UPDATE SET balance = $2
-            `, [accountId, account.balances.current, today]);
+              DO UPDATE SET balance = $2, usd_to_cad_rate = $4
+            `, [accountId, account.balances.current, today, currentRate]);
 
             accountsUpdated++;
           }
@@ -524,7 +526,8 @@ app.post('/api/refresh_balances', async (req, res) => {
     res.json({
       success: true,
       accountsUpdated: accountsUpdated,
-      date: today
+      date: today,
+      exchangeRate: currentRate
     });
   } catch (error) {
     console.error('Error refreshing balances:', error);

@@ -37,6 +37,7 @@ CREATE TABLE balance_snapshots (
   account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
   balance DECIMAL(15, 2) NOT NULL,
   date DATE NOT NULL,
+  usd_to_cad_rate DECIMAL(10, 6),  -- Exchange rate at time of snapshot
   created_at TIMESTAMP DEFAULT NOW(),
   UNIQUE(account_id, date)  -- Only one snapshot per account per day
 );
@@ -61,7 +62,7 @@ CREATE INDEX idx_exchange_rates_currencies ON exchange_rates(from_currency, to_c
 -- These will be used in your Node.js code
 
 -- Example of how to insert encrypted data:
--- INSERT INTO plaid_items (institution_name, access_token_encrypted) 
+-- INSERT INTO plaid_items (institution_name, access_token_encrypted)
 -- VALUES ('Bank Name', pgp_sym_encrypt('access-token-here', 'your-encryption-key'));
 
 -- Example of how to read encrypted data:
