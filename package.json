@@ -9,17 +9,21 @@
     "db:load": "psql balance_tracker < db/load_test_data.sql",
     "db:migrate": "psql balance_tracker < db/add_exchange_rates.sql",
     "db:migrate-rates": "psql balance_tracker < db/add_rate_to_snapshots.sql",
+    "db:migrate-names": "psql balance_tracker < db/update_account_names.sql",
     "db:refresh-rate": "node db/refresh_exchange_rate.js",
     "db:add-snapshot": "node db/add_manual_snapshot.js",
+    "db:add-bulk": "psql balance_tracker < db/add_snapshot.sql",
+    "db:import-csv": "node db/import_csv.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "ISC",
   "description": "Balance tracker using Plaid API",
   "dependencies": {
+    "csv-parse": "^6.1.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "pg": "^8.16.3",
-    "plaid": "^38.1.0"
+    "plaid": "^39.1.0"
   }
 }
