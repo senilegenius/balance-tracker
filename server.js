@@ -25,7 +25,7 @@ pool.query('SELECT NOW()', (err, res) => {
 
 // Initialize Plaid client
 const configuration = new Configuration({
-  basePath: PlaidEnvironments.sandbox,
+  basePath: PlaidEnvironments.production,  // Use 'production' for real banks, 'sandbox' for testing
   baseOptions: {
     headers: {
       'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID,
@@ -198,6 +198,7 @@ app.get('/api/latest_balances', async (req, res) => {
       FROM accounts a
       LEFT JOIN balance_snapshots b ON a.id = b.account_id
       WHERE a.is_active = true
+        AND b.balance IS NOT NULL
         AND b.date = (
           SELECT MAX(date)
           FROM balance_snapshots
@@ -374,7 +375,7 @@ app.get('/api/trend_data', async (req, res) => {
 });
 
 // ===========================================
-// PLAID API ENDPOINTS (Keep existing ones)
+// PLAID API ENDPOINTS
 // ===========================================
 
 // Create a link token - needed to initialize Plaid Link
@@ -384,7 +385,7 @@ app.post('/api/create_link_token', async (req, res) => {
       user: { client_user_id: 'user-1' },
       client_name: 'Balance Tracker',
       products: ['transactions'],
-      country_codes: ['US'],
+      country_codes: ['US','CA'],
       language: 'en',
     });
     res.json({ link_token: response.data.link_token });
@@ -486,11 +487,15 @@ app.post('/api/refresh_balances', async (req, res) => {
       WHERE access_token_encrypted IS NOT NULL
     `);
 
+    console.log(`\n🔄 Refreshing balances for ${itemsResult.rows.length} Plaid items...`);
+
     const today = new Date().toISOString().split('T')[0];
     let accountsUpdated = 0;
 
     for (const item of itemsResult.rows) {
       try {
+        console.log(`\n📍 Processing item: ${item.plaid_item_id}`);
+
         // Decrypt access token
         const accessToken = await decryptToken(item.access_token_encrypted);
 
@@ -499,15 +504,21 @@ app.post('/api/refresh_balances', async (req, res) => {
           access_token: accessToken,
         });
 
+        console.log(`   Found ${balancesResponse.data.accounts.length} accounts from Plaid`);
+
         // Save each balance with the current exchange rate
         for (const account of balancesResponse.data.accounts) {
+          console.log(`   - Account: ${account.name}, Balance: ${account.balances.current}, Plaid ID: ${account.account_id}`);
+
           const accountResult = await pool.query(`
-            SELECT id FROM accounts WHERE plaid_account_id = $1
+            SELECT id, account_name FROM accounts WHERE plaid_account_id = $1
           `, [account.account_id]);
 
           if (accountResult.rows.length > 0) {
             const accountId = accountResult.rows[0].id;
+            const accountName = accountResult.rows[0].account_name;
 
+            // Insert balance (even if null - we track that the account exists)
             await pool.query(`
               INSERT INTO balance_snapshots (account_id, balance, date, usd_to_cad_rate)
               VALUES ($1, $2, $3, $4)
@@ -515,13 +526,22 @@ app.post('/api/refresh_balances', async (req, res) => {
               DO UPDATE SET balance = $2, usd_to_cad_rate = $4
             `, [accountId, account.balances.current, today, currentRate]);
 
-            accountsUpdated++;
+            if (account.balances.current !== null) {
+              console.log(`     ✅ Updated DB account ${accountId} (${accountName}): ${account.balances.current}`);
+              accountsUpdated++;
+            } else {
+              console.log(`     ⚠️  Saved with NULL balance (not available from bank)`);
+            }
+          } else {
+            console.log(`     ⚠️  No matching account in DB for Plaid ID: ${account.account_id}`);
           }
         }
       } catch (error) {
-        console.error(`Error refreshing item ${item.plaid_item_id}:`, error);
+        console.error(`❌ Error refreshing item ${item.plaid_item_id}:`, error.message);
       }
     }
+
+    console.log(`\n✅ Refresh complete: ${accountsUpdated} accounts updated\n`);
 
     res.json({
       success: true,
@@ -550,4 +570,7 @@ app.listen(PORT, () => {
   console.log('   GET  /api/summary - Calculated summary');
   console.log('   GET  /api/trend_data - Data for trend chart');
   console.log('   POST /api/refresh_balances - Update from Plaid\n');
+  console.log('📄 Pages:');
+  console.log('   http://localhost:3000 - Main Dashboard');
+  console.log('   http://localhost:3000/connect.html - Connect Banks\n');
 });

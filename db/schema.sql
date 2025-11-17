@@ -35,7 +35,7 @@ CREATE TABLE accounts (
 CREATE TABLE balance_snapshots (
   id SERIAL PRIMARY KEY,
   account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
-  balance DECIMAL(15, 2) NOT NULL,
+  balance DECIMAL(15, 2),  -- NULL allowed for accounts where balance is unavailable
   date DATE NOT NULL,
   usd_to_cad_rate DECIMAL(10, 6),  -- Exchange rate at time of snapshot
   created_at TIMESTAMP DEFAULT NOW(),
