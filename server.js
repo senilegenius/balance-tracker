@@ -384,14 +384,18 @@ app.post('/api/create_link_token', async (req, res) => {
     const response = await plaidClient.linkTokenCreate({
       user: { client_user_id: 'user-1' },
       client_name: 'Balance Tracker',
-      products: ['transactions'],
+      products: ['auth','transactions'],  // AUTH product includes balance access
       country_codes: ['US','CA'],
       language: 'en',
     });
     res.json({ link_token: response.data.link_token });
   } catch (error) {
     console.error('Error creating link token:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Full error details:', error.response?.data);
+    res.status(500).json({
+      error: error.message,
+      details: error.response?.data
+    });
   }
 });
 
@@ -440,15 +444,20 @@ app.post('/api/exchange_public_token', async (req, res) => {
       const accountType = account.type; // 'depository', 'credit', etc.
       const subtype = account.subtype; // 'checking', 'savings', 'credit card', etc.
 
+      // Auto-detect liabilities based on account type
+      const liabilityTypes = ['mortgage', 'loan', 'line of credit', 'credit line'];
+      const isLiability = liabilityTypes.includes(subtype?.toLowerCase()) ||
+                          liabilityTypes.includes(accountType?.toLowerCase());
+
       await pool.query(`
         INSERT INTO accounts (
           plaid_item_id, institution_name, account_name, account_type,
           currency, account_mask, plaid_account_id, is_liability
         )
         SELECT
-          pi.id, $1, $2, $3, $4, $5, $6, false
+          pi.id, $1, $2, $3, $4, $5, $6, $7
         FROM plaid_items pi
-        WHERE pi.plaid_item_id = $7
+        WHERE pi.plaid_item_id = $8
         ON CONFLICT (plaid_account_id) DO NOTHING
       `, [
         institutionName,
@@ -457,6 +466,7 @@ app.post('/api/exchange_public_token', async (req, res) => {
         account.balances.iso_currency_code || 'USD',
         account.mask,
         account.account_id,
+        isLiability,
         itemId
       ]);
     }
