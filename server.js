@@ -25,7 +25,7 @@ pool.query('SELECT NOW()', (err, res) => {
 
 // Initialize Plaid client
 const configuration = new Configuration({
-  basePath: PlaidEnvironments.production,  // Use 'production' for real banks, 'sandbox' for testing
+  basePath: PlaidEnvironments.production,
   baseOptions: {
     headers: {
       'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID,
@@ -57,7 +57,6 @@ async function decryptToken(encryptedToken) {
 // Helper function to fetch exchange rate from external API
 async function fetchExchangeRateFromAPI(fromCurrency, toCurrency) {
   try {
-    // Using exchangerate-api.com (free, no API key needed for basic usage)
     const response = await fetch(`https://api.exchangerate-api.com/v4/latest/${fromCurrency}`);
 
     if (!response.ok) {
@@ -441,8 +440,8 @@ app.post('/api/exchange_public_token', async (req, res) => {
     });
 
     for (const account of accountsResponse.data.accounts) {
-      const accountType = account.type; // 'depository', 'credit', etc.
-      const subtype = account.subtype; // 'checking', 'savings', 'credit card', etc.
+      const accountType = account.type;
+      const subtype = account.subtype;
 
       // Auto-detect liabilities based on account type
       const liabilityTypes = ['mortgage', 'loan', 'line of credit', 'credit line'];
@@ -481,14 +480,46 @@ app.post('/api/exchange_public_token', async (req, res) => {
 // Refresh balances from Plaid and save to database
 app.post('/api/refresh_balances', async (req, res) => {
   try {
-    // Get current exchange rate
+    // Get current exchange rate (with auto-refresh if stale)
     const exchangeRateResult = await pool.query(`
-      SELECT rate FROM exchange_rates
+      SELECT rate, updated_at FROM exchange_rates
       WHERE from_currency = 'USD' AND to_currency = 'CAD'
     `);
 
-    const currentRate = exchangeRateResult.rows.length > 0 ?
-      parseFloat(exchangeRateResult.rows[0].rate) : 1.40225;
+    let currentRate;
+
+    if (exchangeRateResult.rows.length === 0) {
+      // No rate exists, fetch from API
+      console.log('No USD→CAD rate found, fetching from API...');
+      currentRate = await fetchExchangeRateFromAPI('USD', 'CAD');
+      await pool.query(`
+        INSERT INTO exchange_rates (from_currency, to_currency, rate, updated_at)
+        VALUES ('USD', 'CAD', $1, NOW())
+      `, [currentRate]);
+    } else {
+      currentRate = parseFloat(exchangeRateResult.rows[0].rate);
+      const updatedAt = exchangeRateResult.rows[0].updated_at;
+
+      // Check if rate is stale (older than 24 hours)
+      const ageInHours = (Date.now() - new Date(updatedAt).getTime()) / (1000 * 60 * 60);
+
+      if (ageInHours > 24) {
+        console.log(`Exchange rate is ${ageInHours.toFixed(1)} hours old, refreshing from API...`);
+        try {
+          currentRate = await fetchExchangeRateFromAPI('USD', 'CAD');
+          await pool.query(`
+            UPDATE exchange_rates
+            SET rate = $1, updated_at = NOW()
+            WHERE from_currency = 'USD' AND to_currency = 'CAD'
+          `, [currentRate]);
+          console.log(`✅ Exchange rate updated to ${currentRate}`);
+        } catch (error) {
+          console.error('Error refreshing exchange rate, using cached rate:', error);
+        }
+      } else {
+        console.log(`Using cached exchange rate (${ageInHours.toFixed(1)} hours old): ${currentRate}`);
+      }
+    }
 
     // Get all Plaid items
     const itemsResult = await pool.query(`
