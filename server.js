@@ -530,7 +530,10 @@ app.post('/api/refresh_balances', async (req, res) => {
 
     console.log(`\n🔄 Refreshing balances for ${itemsResult.rows.length} Plaid items...`);
 
-    const today = new Date().toISOString().split('T')[0];
+    // Use provided date or default to server's local timezone
+    const today = req.body.date || new Date().toLocaleDateString('en-CA');
+    console.log(`Using date: ${today}`);
+
     let accountsUpdated = 0;
 
     for (const item of itemsResult.rows) {
