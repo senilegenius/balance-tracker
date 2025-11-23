@@ -280,10 +280,10 @@ app.get('/api/summary', async (req, res) => {
     // Calculate totals for latest date
     const currentTotals = await pool.query(`
       SELECT
-        SUM(CASE WHEN a.currency = 'CAD' AND a.is_liability = false AND a.account_type != 'credit' THEN b.balance ELSE 0 END) as total_cad,
-        SUM(CASE WHEN a.currency = 'USD' AND a.is_liability = false AND a.account_type != 'credit' THEN b.balance ELSE 0 END) as total_usd,
-        SUM(CASE WHEN a.currency = 'CAD' AND a.account_type = 'credit' THEN b.balance ELSE 0 END) as cc_debt_cad,
-        SUM(CASE WHEN a.currency = 'USD' AND a.account_type = 'credit' THEN b.balance ELSE 0 END) as cc_debt_usd
+        SUM(CASE WHEN a.currency = 'CAD' AND a.is_liability = false AND a.account_type != 'credit' AND a.account_type != 'credit card' THEN b.balance ELSE 0 END) as total_cad,
+        SUM(CASE WHEN a.currency = 'USD' AND a.is_liability = false AND a.account_type != 'credit' AND a.account_type != 'credit card' THEN b.balance ELSE 0 END) as total_usd,
+        SUM(CASE WHEN a.currency = 'CAD' AND (a.account_type = 'credit' OR a.account_type = 'credit card') THEN b.balance ELSE 0 END) as cc_debt_cad,
+        SUM(CASE WHEN a.currency = 'USD' AND (a.account_type = 'credit' OR a.account_type = 'credit card') THEN b.balance ELSE 0 END) as cc_debt_usd
       FROM balance_snapshots b
       JOIN accounts a ON b.account_id = a.id
       WHERE b.date = $1 AND a.is_active = true
@@ -292,10 +292,10 @@ app.get('/api/summary', async (req, res) => {
     // Calculate totals for previous date
     const previousTotals = await pool.query(`
       SELECT
-        SUM(CASE WHEN a.currency = 'CAD' AND a.is_liability = false AND a.account_type != 'credit' THEN b.balance ELSE 0 END) as total_cad,
-        SUM(CASE WHEN a.currency = 'USD' AND a.is_liability = false AND a.account_type != 'credit' THEN b.balance ELSE 0 END) as total_usd,
-        SUM(CASE WHEN a.currency = 'CAD' AND a.account_type = 'credit' THEN b.balance ELSE 0 END) as cc_debt_cad,
-        SUM(CASE WHEN a.currency = 'USD' AND a.account_type = 'credit' THEN b.balance ELSE 0 END) as cc_debt_usd
+        SUM(CASE WHEN a.currency = 'CAD' AND a.is_liability = false AND a.account_type != 'credit' AND a.account_type != 'credit card' THEN b.balance ELSE 0 END) as total_cad,
+        SUM(CASE WHEN a.currency = 'USD' AND a.is_liability = false AND a.account_type != 'credit' AND a.account_type != 'credit card' THEN b.balance ELSE 0 END) as total_usd,
+        SUM(CASE WHEN a.currency = 'CAD' AND (a.account_type = 'credit' OR a.account_type = 'credit card') THEN b.balance ELSE 0 END) as cc_debt_cad,
+        SUM(CASE WHEN a.currency = 'USD' AND (a.account_type = 'credit' OR a.account_type = 'credit card') THEN b.balance ELSE 0 END) as cc_debt_usd
       FROM balance_snapshots b
       JOIN accounts a ON b.account_id = a.id
       WHERE b.date = $1 AND a.is_active = true
@@ -349,10 +349,10 @@ app.get('/api/trend_data', async (req, res) => {
         SELECT
           b.date,
           MAX(b.usd_to_cad_rate) as rate,
-          SUM(CASE WHEN a.currency = 'CAD' AND a.is_liability = false AND a.account_type != 'credit' THEN b.balance ELSE 0 END) as total_cad,
-          SUM(CASE WHEN a.currency = 'USD' AND a.is_liability = false AND a.account_type != 'credit' THEN b.balance ELSE 0 END) as total_usd,
-          SUM(CASE WHEN a.currency = 'CAD' AND a.account_type = 'credit' THEN b.balance ELSE 0 END) as cc_debt_cad,
-          SUM(CASE WHEN a.currency = 'USD' AND a.account_type = 'credit' THEN b.balance ELSE 0 END) as cc_debt_usd
+          SUM(CASE WHEN a.currency = 'CAD' AND a.is_liability = false AND a.account_type != 'credit' AND a.account_type != 'credit card' THEN b.balance ELSE 0 END) as total_cad,
+          SUM(CASE WHEN a.currency = 'USD' AND a.is_liability = false AND a.account_type != 'credit' AND a.account_type != 'credit card' THEN b.balance ELSE 0 END) as total_usd,
+          SUM(CASE WHEN a.currency = 'CAD' AND (a.account_type = 'credit' OR a.account_type = 'credit card') THEN b.balance ELSE 0 END) as cc_debt_cad,
+          SUM(CASE WHEN a.currency = 'USD' AND (a.account_type = 'credit' OR a.account_type = 'credit card') THEN b.balance ELSE 0 END) as cc_debt_usd
         FROM balance_snapshots b
         JOIN accounts a ON b.account_id = a.id
         WHERE a.is_active = true
