@@ -243,75 +243,69 @@ app.get('/api/historical_balances', async (req, res) => {
 // Get summary calculations
 app.get('/api/summary', async (req, res) => {
   try {
-    // Get the latest date
-    const latestDateResult = await pool.query(`
-      SELECT MAX(date) as latest_date FROM balance_snapshots
-    `);
-    const latestDate = latestDateResult.rows[0].latest_date;
-
-    // Get previous date for comparison
-    const previousDateResult = await pool.query(`
-      SELECT MAX(date) as previous_date
-      FROM balance_snapshots
-      WHERE date < $1
-    `, [latestDate]);
-    const previousDate = previousDateResult.rows[0].previous_date;
-
-    // Get exchange rate for latest date (from any snapshot on that date)
-    const latestRateResult = await pool.query(`
-      SELECT usd_to_cad_rate
-      FROM balance_snapshots
-      WHERE date = $1
-      LIMIT 1
-    `, [latestDate]);
-
-    // Get exchange rate for previous date
-    const previousRateResult = await pool.query(`
-      SELECT usd_to_cad_rate
-      FROM balance_snapshots
-      WHERE date = $1
-      LIMIT 1
-    `, [previousDate]);
-
-    const currentRate = parseFloat(latestRateResult.rows[0].usd_to_cad_rate);
-    const previousRate = previousRateResult.rows.length > 0 ?
-      parseFloat(previousRateResult.rows[0].usd_to_cad_rate) : currentRate;
-
-    // Calculate totals for latest date
+    // Calculate totals using each account's most recent snapshot
     const currentTotals = await pool.query(`
       SELECT
         SUM(CASE WHEN a.currency = 'CAD' AND a.is_liability = false AND a.account_type != 'credit' AND a.account_type != 'credit card' THEN b.balance ELSE 0 END) as total_cad,
         SUM(CASE WHEN a.currency = 'USD' AND a.is_liability = false AND a.account_type != 'credit' AND a.account_type != 'credit card' THEN b.balance ELSE 0 END) as total_usd,
         SUM(CASE WHEN a.currency = 'CAD' AND (a.account_type = 'credit' OR a.account_type = 'credit card') THEN b.balance ELSE 0 END) as cc_debt_cad,
-        SUM(CASE WHEN a.currency = 'USD' AND (a.account_type = 'credit' OR a.account_type = 'credit card') THEN b.balance ELSE 0 END) as cc_debt_usd
+        SUM(CASE WHEN a.currency = 'USD' AND (a.account_type = 'credit' OR a.account_type = 'credit card') THEN b.balance ELSE 0 END) as cc_debt_usd,
+        MAX(b.date) as latest_date,
+        MAX(b.usd_to_cad_rate) as current_rate
       FROM balance_snapshots b
       JOIN accounts a ON b.account_id = a.id
-      WHERE b.date = $1 AND a.is_active = true
-    `, [latestDate]);
+      WHERE a.is_active = true
+        AND b.date = (
+          SELECT MAX(date)
+          FROM balance_snapshots
+          WHERE account_id = a.id
+        )
+    `);
 
-    // Calculate totals for previous date
-    const previousTotals = await pool.query(`
-      SELECT
-        SUM(CASE WHEN a.currency = 'CAD' AND a.is_liability = false AND a.account_type != 'credit' AND a.account_type != 'credit card' THEN b.balance ELSE 0 END) as total_cad,
-        SUM(CASE WHEN a.currency = 'USD' AND a.is_liability = false AND a.account_type != 'credit' AND a.account_type != 'credit card' THEN b.balance ELSE 0 END) as total_usd,
-        SUM(CASE WHEN a.currency = 'CAD' AND (a.account_type = 'credit' OR a.account_type = 'credit card') THEN b.balance ELSE 0 END) as cc_debt_cad,
-        SUM(CASE WHEN a.currency = 'USD' AND (a.account_type = 'credit' OR a.account_type = 'credit card') THEN b.balance ELSE 0 END) as cc_debt_usd
-      FROM balance_snapshots b
-      JOIN accounts a ON b.account_id = a.id
-      WHERE b.date = $1 AND a.is_active = true
-    `, [previousDate]);
+    // Get the previous snapshot date for comparison (second most recent across all accounts)
+    const previousDateResult = await pool.query(`
+      SELECT DISTINCT date
+      FROM balance_snapshots
+      ORDER BY date DESC
+      LIMIT 1 OFFSET 1
+    `);
+
+    const latestDate = currentTotals.rows[0].latest_date;
+    const currentRate = parseFloat(currentTotals.rows[0].current_rate);
+    const previousDate = previousDateResult.rows.length > 0 ? previousDateResult.rows[0].date : null;
+
+    // Calculate totals for previous date (if exists)
+    let previousTotals = null;
+    let previousRate = currentRate;
+
+    if (previousDate) {
+      previousTotals = await pool.query(`
+        SELECT
+          SUM(CASE WHEN a.currency = 'CAD' AND a.is_liability = false AND a.account_type != 'credit' AND a.account_type != 'credit card' THEN b.balance ELSE 0 END) as total_cad,
+          SUM(CASE WHEN a.currency = 'USD' AND a.is_liability = false AND a.account_type != 'credit' AND a.account_type != 'credit card' THEN b.balance ELSE 0 END) as total_usd,
+          SUM(CASE WHEN a.currency = 'CAD' AND (a.account_type = 'credit' OR a.account_type = 'credit card') THEN b.balance ELSE 0 END) as cc_debt_cad,
+          SUM(CASE WHEN a.currency = 'USD' AND (a.account_type = 'credit' OR a.account_type = 'credit card') THEN b.balance ELSE 0 END) as cc_debt_usd,
+          MAX(b.usd_to_cad_rate) as rate
+        FROM balance_snapshots b
+        JOIN accounts a ON b.account_id = a.id
+        WHERE a.is_active = true
+          AND b.date = $1
+      `, [previousDate]);
+
+      previousRate = parseFloat(previousTotals.rows[0].rate);
+    }
 
     const current = currentTotals.rows[0];
-    const previous = previousTotals.rows[0];
+    const previous = previousTotals ? previousTotals.rows[0] : null;
 
-    // Calculate liquid cash using the rate from that date
+    // Calculate liquid cash using the rate from each snapshot
     const currentLiquidCad =
       parseFloat(current.total_cad) +
       (parseFloat(current.total_usd) * currentRate) -
       Math.abs(parseFloat(current.cc_debt_cad)) -
       (Math.abs(parseFloat(current.cc_debt_usd)) * currentRate);
 
-    const previousLiquidCad = previous.total_cad !== null ?
+    const previousLiquidCad = previous && previous.total_cad !== null ?
       parseFloat(previous.total_cad) +
       (parseFloat(previous.total_usd) * previousRate) -
       Math.abs(parseFloat(previous.cc_debt_cad)) -
@@ -330,10 +324,10 @@ app.get('/api/summary', async (req, res) => {
       ccDebtUsd: Math.abs(parseFloat(current.cc_debt_usd)),
       liquidCashCad: currentLiquidCad,
       liquidChange: liquidChange,
-      previousTotalCad: previous.total_cad !== null ? parseFloat(previous.total_cad) : null,
-      previousTotalUsd: previous.total_usd !== null ? parseFloat(previous.total_usd) : null,
-      previousCcDebtCad: previous.cc_debt_cad !== null ? Math.abs(parseFloat(previous.cc_debt_cad)) : null,
-      previousCcDebtUsd: previous.cc_debt_usd !== null ? Math.abs(parseFloat(previous.cc_debt_usd)) : null,
+      previousTotalCad: previous && previous.total_cad !== null ? parseFloat(previous.total_cad) : null,
+      previousTotalUsd: previous && previous.total_usd !== null ? parseFloat(previous.total_usd) : null,
+      previousCcDebtCad: previous && previous.cc_debt_cad !== null ? Math.abs(parseFloat(previous.cc_debt_cad)) : null,
+      previousCcDebtUsd: previous && previous.cc_debt_usd !== null ? Math.abs(parseFloat(previous.cc_debt_usd)) : null,
     });
   } catch (error) {
     console.error('Error calculating summary:', error);
