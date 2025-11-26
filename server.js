@@ -339,19 +339,45 @@ app.get('/api/summary', async (req, res) => {
 app.get('/api/trend_data', async (req, res) => {
   try {
     const result = await pool.query(`
-      WITH daily_totals AS (
+      WITH all_dates AS (
+        SELECT DISTINCT date FROM balance_snapshots ORDER BY date
+      ),
+      account_date_balances AS (
         SELECT
-          b.date,
-          MAX(b.usd_to_cad_rate) as rate,
-          SUM(CASE WHEN a.currency = 'CAD' AND a.is_liability = false AND a.account_type != 'credit' AND a.account_type != 'credit card' THEN b.balance ELSE 0 END) as total_cad,
-          SUM(CASE WHEN a.currency = 'USD' AND a.is_liability = false AND a.account_type != 'credit' AND a.account_type != 'credit card' THEN b.balance ELSE 0 END) as total_usd,
-          SUM(CASE WHEN a.currency = 'CAD' AND (a.account_type = 'credit' OR a.account_type = 'credit card') THEN b.balance ELSE 0 END) as cc_debt_cad,
-          SUM(CASE WHEN a.currency = 'USD' AND (a.account_type = 'credit' OR a.account_type = 'credit card') THEN b.balance ELSE 0 END) as cc_debt_usd
-        FROM balance_snapshots b
-        JOIN accounts a ON b.account_id = a.id
+          d.date,
+          a.id as account_id,
+          a.currency,
+          a.is_liability,
+          a.account_type,
+          (
+            SELECT b.balance
+            FROM balance_snapshots b
+            WHERE b.account_id = a.id AND b.date <= d.date
+            ORDER BY b.date DESC
+            LIMIT 1
+          ) as balance,
+          (
+            SELECT b.usd_to_cad_rate
+            FROM balance_snapshots b
+            WHERE b.account_id = a.id AND b.date <= d.date
+            ORDER BY b.date DESC
+            LIMIT 1
+          ) as rate
+        FROM all_dates d
+        CROSS JOIN accounts a
         WHERE a.is_active = true
-        GROUP BY b.date
-        ORDER BY b.date
+      ),
+      daily_totals AS (
+        SELECT
+          date,
+          MAX(rate) as rate,
+          SUM(CASE WHEN currency = 'CAD' AND is_liability = false AND account_type != 'credit' AND account_type != 'credit card' AND balance IS NOT NULL THEN balance ELSE 0 END) as total_cad,
+          SUM(CASE WHEN currency = 'USD' AND is_liability = false AND account_type != 'credit' AND account_type != 'credit card' AND balance IS NOT NULL THEN balance ELSE 0 END) as total_usd,
+          SUM(CASE WHEN currency = 'CAD' AND (account_type = 'credit' OR account_type = 'credit card') AND balance IS NOT NULL THEN balance ELSE 0 END) as cc_debt_cad,
+          SUM(CASE WHEN currency = 'USD' AND (account_type = 'credit' OR account_type = 'credit card') AND balance IS NOT NULL THEN balance ELSE 0 END) as cc_debt_usd
+        FROM account_date_balances
+        GROUP BY date
+        ORDER BY date
       )
       SELECT
         date,
