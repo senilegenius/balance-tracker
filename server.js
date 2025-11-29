@@ -393,6 +393,134 @@ app.get('/api/trend_data', async (req, res) => {
   }
 });
 
+// Get account history for individual account view
+app.get('/api/account_history/:accountId', async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.accountId);
+
+    // Get account info
+    const accountInfo = await pool.query(`
+      SELECT account_name, currency, account_type
+      FROM accounts
+      WHERE id = $1
+    `, [accountId]);
+
+    if (accountInfo.rows.length === 0) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+
+    // Get all snapshots for this account
+    const snapshots = await pool.query(`
+      SELECT date, balance
+      FROM balance_snapshots
+      WHERE account_id = $1
+      ORDER BY date
+    `, [accountId]);
+
+    if (snapshots.rows.length === 0) {
+      return res.json({
+        account: accountInfo.rows[0],
+        monthlyData: [],
+        stats: null
+      });
+    }
+
+    // Aggregate by month (last snapshot of each month)
+    const monthlyData = [];
+    const allMonths = new Set();
+
+    // Get all months that have snapshots
+    snapshots.rows.forEach(row => {
+      const date = new Date(row.date);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      allMonths.add(monthKey);
+    });
+
+    // Get min and max month
+    const sortedMonths = Array.from(allMonths).sort();
+    const minMonth = sortedMonths[0];
+    const maxMonth = sortedMonths[sortedMonths.length - 1];
+
+    // Generate all months from min to max (fill gaps)
+    const [minYear, minMonthNum] = minMonth.split('-').map(Number);
+    const [maxYear, maxMonthNum] = maxMonth.split('-').map(Number);
+
+    let currentYear = minYear;
+    let currentMonth = minMonthNum;
+    let lastBalance = null;
+
+    while (currentYear < maxYear || (currentYear === maxYear && currentMonth <= maxMonthNum)) {
+      const monthKey = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+
+      // Find last snapshot in this month
+      const monthSnapshot = snapshots.rows
+        .filter(row => {
+          const d = new Date(row.date);
+          const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          return mk === monthKey;
+        })
+        .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+
+      const balance = monthSnapshot ? parseFloat(monthSnapshot.balance) : lastBalance;
+
+      if (balance !== null) {
+        const monthName = new Date(currentYear, currentMonth - 1).toLocaleString('en-US', { month: 'short', year: 'numeric' });
+        monthlyData.push({
+          month: monthName,
+          balance: balance,
+          date: monthSnapshot ? monthSnapshot.date : null,
+          isCarriedForward: !monthSnapshot
+        });
+        lastBalance = balance;
+      }
+
+      // Move to next month
+      currentMonth++;
+      if (currentMonth > 12) {
+        currentMonth = 1;
+        currentYear++;
+      }
+    }
+
+    // Calculate stats for last 3 months
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+    const recentSnapshots = snapshots.rows.filter(row =>
+      new Date(row.date) >= threeMonthsAgo
+    );
+
+    let stats = null;
+    if (recentSnapshots.length > 0) {
+      const balances = recentSnapshots.map(s => parseFloat(s.balance));
+      const minBalance = Math.min(...balances);
+      const maxBalance = Math.max(...balances);
+      const minSnapshot = recentSnapshots.find(s => parseFloat(s.balance) === minBalance);
+      const maxSnapshot = recentSnapshots.find(s => parseFloat(s.balance) === maxBalance);
+      const firstBalance = parseFloat(recentSnapshots[0].balance);
+      const lastBalance = parseFloat(recentSnapshots[recentSnapshots.length - 1].balance);
+
+      stats = {
+        min: minBalance,
+        minDate: minSnapshot.date,
+        max: maxBalance,
+        maxDate: maxSnapshot.date,
+        totalChange: lastBalance - firstBalance
+      };
+    }
+
+    res.json({
+      account: accountInfo.rows[0],
+      monthlyData: monthlyData,
+      stats: stats
+    });
+
+  } catch (error) {
+    console.error('Error fetching account history:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ===========================================
 // PLAID API ENDPOINTS
 // ===========================================
@@ -551,7 +679,7 @@ app.post('/api/refresh_balances', async (req, res) => {
     console.log(`\n🔄 Refreshing balances for ${itemsResult.rows.length} Plaid items...`);
 
     // Use provided date or default to server's local timezone
-    const today = req.body.date || new Date().toLocaleDateString('en-CA');
+    const today = req.body?.date || new Date().toLocaleDateString('en-CA');
     console.log(`Using date: ${today}`);
 
     let accountsUpdated = 0;
@@ -633,6 +761,7 @@ app.listen(PORT, () => {
   console.log('   GET  /api/historical_balances - All balance history');
   console.log('   GET  /api/summary - Calculated summary');
   console.log('   GET  /api/trend_data - Data for trend chart');
+  console.log('   GET  /api/account_history/:id - Individual account history');
   console.log('   POST /api/refresh_balances - Update from Plaid\n');
   console.log('📄 Pages:');
   console.log('   http://localhost:3000 - Main Dashboard');
