@@ -703,12 +703,24 @@ app.post('/api/refresh_balances', async (req, res) => {
           console.log(`   - Account: ${account.name}, Balance: ${account.balances.current}, Plaid ID: ${account.account_id}`);
 
           const accountResult = await pool.query(`
-            SELECT id, account_name FROM accounts WHERE plaid_account_id = $1
+            SELECT id, account_name, account_type FROM accounts WHERE plaid_account_id = $1
           `, [account.account_id]);
 
           if (accountResult.rows.length > 0) {
             const accountId = accountResult.rows[0].id;
             const accountName = accountResult.rows[0].account_name;
+            const accountType = accountResult.rows[0].account_type;
+
+            let balanceToSave = account.balances.current;
+
+            // For debt accounts, invert the sign (Plaid convention: positive = debt, Our convention: negative = debt)
+            if (balanceToSave !== null) {
+              const debtTypes = ['mortgage', 'loan', 'line of credit', 'credit card'];
+              if (debtTypes.includes(accountType.toLowerCase())) {
+                balanceToSave = -balanceToSave;
+                console.log(`     🔄 Inverted balance (debt account): ${account.balances.current} → ${balanceToSave}`);
+              }
+            }
 
             // Insert balance (even if null - we track that the account exists)
             await pool.query(`
@@ -716,10 +728,10 @@ app.post('/api/refresh_balances', async (req, res) => {
               VALUES ($1, $2, $3, $4)
               ON CONFLICT (account_id, date)
               DO UPDATE SET balance = $2, usd_to_cad_rate = $4
-            `, [accountId, account.balances.current, today, currentRate]);
+            `, [accountId, balanceToSave, today, currentRate]);
 
-            if (account.balances.current !== null) {
-              console.log(`     ✅ Updated DB account ${accountId} (${accountName}): ${account.balances.current}`);
+            if (balanceToSave !== null) {
+              console.log(`     ✅ Updated DB account ${accountId} (${accountName}): ${balanceToSave}`);
               accountsUpdated++;
             } else {
               console.log(`     ⚠️  Saved with NULL balance (not available from bank)`);
