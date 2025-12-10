@@ -2,17 +2,44 @@
 require('dotenv').config();
 
 const express = require('express');
+const session = require('express-session');
+const pgSession = require('connect-pg-simple')(session);
+const bcrypt = require('bcrypt');
 const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid');
 const { Pool } = require('pg');
 
 const app = express();
 app.use(express.json());
-app.use(express.static('public'));
 
 // Initialize PostgreSQL connection pool
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
+
+// Configure session middleware
+app.use(session({
+  store: new pgSession({
+    pool: pool,
+    tableName: 'session'
+  }),
+  secret: process.env.SESSION_SECRET || 'your-secret-key-change-this',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    httpOnly: true, // Prevent JavaScript access
+    secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+    sameSite: 'lax'
+  }
+}));
+
+// Protect HTML pages before serving static files
+app.get('/', requireAuthPage);
+app.get('/index.html', requireAuthPage);
+app.get('/connect.html', requireAuthPage);
+
+// Serve static files
+app.use(express.static('public'));
 
 // Test database connection
 pool.query('SELECT NOW()', (err, res) => {
@@ -78,8 +105,100 @@ async function fetchExchangeRateFromAPI(fromCurrency, toCurrency) {
 }
 
 // ===========================================
+// AUTHENTICATION MIDDLEWARE
+// ===========================================
+
+// Middleware to check if user is authenticated
+function requireAuth(req, res, next) {
+  if (req.session && req.session.userId) {
+    // User is authenticated
+    return next();
+  }
+
+  // Not authenticated - return 401 for API calls
+  return res.status(401).json({ error: 'Unauthorized. Please login.' });
+}
+
+// Middleware to redirect unauthenticated users to login for HTML pages
+function requireAuthPage(req, res, next) {
+  if (req.session && req.session.userId) {
+    return next();
+  }
+
+  // Redirect to login page
+  return res.redirect('/login.html');
+}
+
+// ===========================================
+// AUTHENTICATION ENDPOINTS
+// ===========================================
+
+// Login endpoint
+app.post('/api/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password required' });
+    }
+
+    // Get user from database
+    const result = await pool.query(`
+      SELECT id, username, password_hash
+      FROM users
+      WHERE username = $1
+    `, [username]);
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    const user = result.rows[0];
+
+    // Compare password with hash
+    const isValid = await bcrypt.compare(password, user.password_hash);
+
+    if (!isValid) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    // Set session
+    req.session.userId = user.id;
+    req.session.username = user.username;
+
+    res.json({ success: true, username: user.username });
+
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'An error occurred during login' });
+  }
+});
+
+// Logout endpoint
+app.post('/api/logout', (req, res) => {
+  req.session.destroy(err => {
+    if (err) {
+      return res.status(500).json({ error: 'Error logging out' });
+    }
+    res.json({ success: true });
+  });
+});
+
+// Check if user is logged in
+app.get('/api/check-auth', (req, res) => {
+  if (req.session && req.session.userId) {
+    res.json({ authenticated: true, username: req.session.username });
+  } else {
+    res.json({ authenticated: false });
+  }
+});
+
+// ===========================================
 // DATABASE API ENDPOINTS
 // ===========================================
+
+// Apply authentication to all API endpoints below
+app.use('/api/', requireAuth);
 
 // Get exchange rate (with automatic refresh if stale)
 app.get('/api/exchange_rate', async (req, res) => {

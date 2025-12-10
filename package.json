@@ -12,19 +12,24 @@
     "db:migrate-names": "psql balance_tracker < db/update_account_names.sql",
     "db:migrate-null": "psql balance_tracker < db/allow_null_balances.sql",
     "db:migrate-credit": "psql balance_tracker < db/standardize_credit_cards.sql",
+    "db:migrate-auth": "psql balance_tracker < db/add_auth_tables.sql",
     "db:refresh-rate": "node db/refresh_exchange_rate.js",
     "db:add-snapshot": "node db/add_manual_snapshot.js",
     "db:add-bulk": "psql balance_tracker < db/add_snapshot.sql",
     "db:import-csv": "node db/import_csv.js",
+    "create-user": "node db/create_user.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "ISC",
   "description": "Balance tracker using Plaid API",
   "dependencies": {
+    "bcrypt": "^6.0.0",
+    "connect-pg-simple": "^10.0.0",
     "csv-parse": "^6.1.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "express-session": "^1.18.2",
     "pg": "^8.16.3",
     "plaid": "^39.1.0"
   }

@@ -3,9 +3,29 @@ DROP TABLE IF EXISTS balance_snapshots CASCADE;
 DROP TABLE IF EXISTS accounts CASCADE;
 DROP TABLE IF EXISTS plaid_items CASCADE;
 DROP TABLE IF EXISTS exchange_rates CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS session CASCADE;
 
 -- Enable pgcrypto extension for encryption
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- Table: users (authentication)
+CREATE TABLE users (
+  id SERIAL PRIMARY KEY,
+  username VARCHAR(50) UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Table: session (for express-session)
+CREATE TABLE session (
+  sid VARCHAR NOT NULL COLLATE "default",
+  sess JSON NOT NULL,
+  expire TIMESTAMP(6) NOT NULL,
+  PRIMARY KEY (sid)
+);
+
+CREATE INDEX IDX_session_expire ON session (expire);
 
 -- Table: plaid_items (stores access tokens for each bank connection)
 CREATE TABLE plaid_items (
