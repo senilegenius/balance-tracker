@@ -650,7 +650,8 @@ app.post('/api/create_link_token', async (req, res) => {
     const response = await plaidClient.linkTokenCreate({
       user: { client_user_id: 'user-1' },
       client_name: 'Balance Tracker',
-      products: ['auth','transactions'],  // AUTH product includes balance access
+      // products: ['auth','transactions'],  // AUTH product includes balance access
+      products: ['transactions'],
       country_codes: ['US','CA'],
       language: 'en',
     });
