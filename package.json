@@ -18,7 +18,8 @@
     "db:add-bulk": "psql balance_tracker < db/add_snapshot.sql",
     "db:import-csv": "node db/import_csv.js",
     "create-user": "node db/create_user.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "migrate:account-19-to-34": "node migrations/007_migrate_account_19_to_34.js"
   },
   "author": "",
   "license": "ISC",
