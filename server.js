@@ -835,10 +835,12 @@ app.post('/api/refresh_balances', async (req, res) => {
 
             // For debt accounts, invert the sign (Plaid convention: positive = debt, Our convention: negative = debt)
             if (balanceToSave !== null) {
-              const debtTypes = ['mortgage', 'loan', 'line of credit', 'credit card'];
-              if (debtTypes.includes(accountType.toLowerCase())) {
+              const debtTypes = ['mortgage', 'loan', 'line of credit', 'credit card', 'auto'];
+              const isDebtType = debtTypes.includes(accountType.toLowerCase());
+
+              if (isDebtType || accountResult.rows[0].is_liability) {
                 balanceToSave = -balanceToSave;
-                console.log(`     🔄 Inverted balance (debt account): ${account.balances.current} → ${balanceToSave}`);
+                console.log(`     🔄 Inverted balance (${isDebtType ? 'debt type' : 'liability'}): ${account.balances.current} → ${balanceToSave}`);
               }
             }
 
