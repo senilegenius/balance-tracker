@@ -299,6 +299,36 @@ app.get('/api/accounts', async (req, res) => {
   }
 });
 
+// Get manual accounts (accounts without plaid_account_id) with their last balances
+app.get('/api/manual_accounts', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        a.id,
+        a.account_name,
+        a.currency,
+        a.account_type,
+        a.is_liability,
+        (
+          SELECT b.balance
+          FROM balance_snapshots b
+          WHERE b.account_id = a.id
+          ORDER BY b.date DESC
+          LIMIT 1
+        ) as last_balance
+      FROM accounts a
+      WHERE a.plaid_account_id IS NULL
+        AND a.is_active = true
+      ORDER BY a.institution_name, a.account_name
+    `);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching manual accounts:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get latest balances for all active accounts
 app.get('/api/latest_balances', async (req, res) => {
   try {
@@ -695,6 +725,7 @@ app.post('/api/exchange_public_token', async (req, res) => {
     // Encrypt and save to database
     const encryptedToken = await encryptToken(accessToken);
 
+    // Insert balance (even if null - we track that the account exists)
     await pool.query(`
       INSERT INTO plaid_items (institution_name, plaid_item_id, access_token_encrypted)
       VALUES ($1, $2, $3)
@@ -748,6 +779,8 @@ app.post('/api/exchange_public_token', async (req, res) => {
 // Refresh balances from Plaid and save to database
 app.post('/api/refresh_balances', async (req, res) => {
   try {
+    const { manualBalances } = req.body || {};
+
     // Get current exchange rate (with auto-refresh if stale)
     const exchangeRateResult = await pool.query(`
       SELECT rate, updated_at FROM exchange_rates
@@ -767,7 +800,6 @@ app.post('/api/refresh_balances', async (req, res) => {
     } else {
       currentRate = parseFloat(exchangeRateResult.rows[0].rate);
       const updatedAt = exchangeRateResult.rows[0].updated_at;
-
       // Check if rate is stale (older than 24 hours)
       const ageInHours = (Date.now() - new Date(updatedAt).getTime()) / (1000 * 60 * 60);
 
@@ -789,20 +821,23 @@ app.post('/api/refresh_balances', async (req, res) => {
       }
     }
 
-    // Get all Plaid items
-    const itemsResult = await pool.query(`
-      SELECT id, plaid_item_id, access_token_encrypted
-      FROM plaid_items
-      WHERE access_token_encrypted IS NOT NULL
-    `);
-
-    console.log(`\n🔄 Refreshing balances for ${itemsResult.rows.length} Plaid items...`);
-
     // Use provided date or default to server's local timezone
     const today = req.body?.date || new Date().toLocaleDateString('en-CA');
     console.log(`Using date: ${today}`);
 
     let accountsUpdated = 0;
+
+    // Only process Plaid accounts if manualBalances is not provided
+    // (manualBalances presence indicates this is the second call)
+    if (!manualBalances || Object.keys(manualBalances).length === 0) {
+      // Process Plaid accounts
+      const itemsResult = await pool.query(`
+        SELECT id, plaid_item_id, access_token_encrypted
+        FROM plaid_items
+        WHERE access_token_encrypted IS NOT NULL
+      `);
+
+      console.log(`\n🔄 Refreshing balances for ${itemsResult.rows.length} Plaid items...`);
 
     for (const item of itemsResult.rows) {
       try {
@@ -823,7 +858,7 @@ app.post('/api/refresh_balances', async (req, res) => {
           console.log(`   - Account: ${account.name}, Balance: ${account.balances.current}, Plaid ID: ${account.account_id}`);
 
           const accountResult = await pool.query(`
-            SELECT id, account_name, account_type FROM accounts WHERE plaid_account_id = $1
+            SELECT id, account_name, account_type, is_liability FROM accounts WHERE plaid_account_id = $1
           `, [account.account_id]);
 
           if (accountResult.rows.length > 0) {
@@ -844,7 +879,6 @@ app.post('/api/refresh_balances', async (req, res) => {
               }
             }
 
-            // Insert balance (even if null - we track that the account exists)
             await pool.query(`
               INSERT INTO balance_snapshots (account_id, balance, date, usd_to_cad_rate)
               VALUES ($1, $2, $3, $4)
@@ -866,12 +900,56 @@ app.post('/api/refresh_balances', async (req, res) => {
         console.error(`❌ Error refreshing item ${item.plaid_item_id}:`, error.message);
       }
     }
+    }
 
-    console.log(`\n✅ Refresh complete: ${accountsUpdated} accounts updated\n`);
+    // Process manual accounts if provided
+    let manualAccountsUpdated = 0;
+    if (manualBalances && Object.keys(manualBalances).length > 0) {
+      console.log(`\n💼 Processing ${Object.keys(manualBalances).length} manual accounts...`);
+
+      for (const [accountId, balance] of Object.entries(manualBalances)) {
+        if (balance === null || balance === undefined || balance === '') {
+          console.log(`   ⏭️  Skipping account ${accountId} (no value provided)`);
+          continue;
+        }
+
+        const accountResult = await pool.query(`
+          SELECT account_name, is_liability FROM accounts WHERE id = $1
+        `, [parseInt(accountId)]);
+
+        if (accountResult.rows.length > 0) {
+          const accountName = accountResult.rows[0].account_name;
+          const isLiability = accountResult.rows[0].is_liability;
+
+          let balanceToSave = parseFloat(balance);
+
+          // Invert if liability (user enters positive, we store negative)
+          if (isLiability && balanceToSave > 0) {
+            balanceToSave = -balanceToSave;
+            console.log(`   🔄 Inverted balance for liability ${accountName}: ${balance} → ${balanceToSave}`);
+          }
+
+          await pool.query(`
+            INSERT INTO balance_snapshots (account_id, balance, date, usd_to_cad_rate)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (account_id, date)
+            DO UPDATE SET balance = $2, usd_to_cad_rate = $4
+          `, [parseInt(accountId), balanceToSave, today, currentRate]);
+
+          console.log(`   ✅ Updated manual account ${accountId} (${accountName}): ${balanceToSave}`);
+          manualAccountsUpdated++;
+        }
+      }
+    }
+
+    const totalUpdated = accountsUpdated + manualAccountsUpdated;
+    console.log(`\n✅ Refresh complete: ${totalUpdated} accounts updated (${accountsUpdated} Plaid, ${manualAccountsUpdated} manual)\n`);
 
     res.json({
       success: true,
-      accountsUpdated: accountsUpdated,
+      accountsUpdated: totalUpdated,
+      plaidAccountsUpdated: accountsUpdated,
+      manualAccountsUpdated: manualAccountsUpdated,
       date: today,
       exchangeRate: currentRate
     });
@@ -891,12 +969,13 @@ app.listen(PORT, () => {
   console.log('\n📊 Available endpoints:');
   console.log('   GET  /api/exchange_rate - Get USD/CAD exchange rate');
   console.log('   GET  /api/accounts - List all accounts');
+  console.log('   GET  /api/manual_accounts - List manual accounts with last balances');
   console.log('   GET  /api/latest_balances - Current balances');
   console.log('   GET  /api/historical_balances - All balance history');
   console.log('   GET  /api/summary - Calculated summary');
   console.log('   GET  /api/trend_data - Data for trend chart');
   console.log('   GET  /api/account_history/:id - Individual account history');
-  console.log('   POST /api/refresh_balances - Update from Plaid\n');
+  console.log('   POST /api/refresh_balances - Update from Plaid and manual accounts\n');
   console.log('📄 Pages:');
   console.log('   http://localhost:3000 - Main Dashboard');
   console.log('   http://localhost:3000/connect.html - Connect Banks\n');
