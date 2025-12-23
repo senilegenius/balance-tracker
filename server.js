@@ -914,19 +914,21 @@ app.post('/api/refresh_balances', async (req, res) => {
         }
 
         const accountResult = await pool.query(`
-          SELECT account_name, is_liability FROM accounts WHERE id = $1
+          SELECT account_name, account_type, is_liability FROM accounts WHERE id = $1
         `, [parseInt(accountId)]);
 
         if (accountResult.rows.length > 0) {
           const accountName = accountResult.rows[0].account_name;
+          const accountType = accountResult.rows[0].account_type;
           const isLiability = accountResult.rows[0].is_liability;
 
           let balanceToSave = parseFloat(balance);
 
-          // Invert if liability (user enters positive, we store negative)
-          if (isLiability && balanceToSave > 0) {
+          // Invert if liability or credit card (user enters positive, we store negative)
+          const isCreditCard = accountType === 'credit' || accountType === 'credit card';
+          if ((isLiability || isCreditCard) && balanceToSave > 0) {
             balanceToSave = -balanceToSave;
-            console.log(`   🔄 Inverted balance for liability ${accountName}: ${balance} → ${balanceToSave}`);
+            console.log(`   🔄 Inverted balance for ${isCreditCard ? 'credit card' : 'liability'} ${accountName}: ${balance} → ${balanceToSave}`);
           }
 
           await pool.query(`
