@@ -487,7 +487,10 @@ app.get('/api/summary', async (req, res) => {
 // Get balance history for trend chart
 app.get('/api/trend_data', async (req, res) => {
   try {
-    const result = await pool.query(`
+    const granularity = req.query.granularity || 'daily';
+
+    // First, get all daily data points
+    const dailyResult = await pool.query(`
       WITH all_dates AS (
         SELECT DISTINCT date FROM balance_snapshots ORDER BY date
       ),
@@ -535,7 +538,67 @@ app.get('/api/trend_data', async (req, res) => {
       ORDER BY date
     `);
 
-    res.json(result.rows);
+    let finalResult = dailyResult.rows;
+
+    // Apply aggregation based on granularity
+    if (granularity === 'weekly') {
+      // Group by week, preferring Sunday, then Saturday, then Monday
+      const weeklyData = {};
+
+      dailyResult.rows.forEach(row => {
+        const date = new Date(row.date);
+        const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
+
+        // Calculate the Sunday of this week
+        const sunday = new Date(date);
+        sunday.setDate(date.getDate() - dayOfWeek);
+        const weekKey = sunday.toISOString().split('T')[0];
+
+        if (!weeklyData[weekKey]) {
+          weeklyData[weekKey] = {
+            sunday: null,
+            saturday: null,
+            monday: null,
+            other: null
+          };
+        }
+
+        // Store by day priority
+        if (dayOfWeek === 0) { // Sunday
+          weeklyData[weekKey].sunday = row;
+        } else if (dayOfWeek === 6) { // Saturday
+          weeklyData[weekKey].saturday = row;
+        } else if (dayOfWeek === 1) { // Monday
+          weeklyData[weekKey].monday = row;
+        } else if (!weeklyData[weekKey].other) {
+          weeklyData[weekKey].other = row;
+        }
+      });
+
+      // Select best day for each week
+      finalResult = Object.keys(weeklyData).sort().map(weekKey => {
+        const week = weeklyData[weekKey];
+        return week.sunday || week.saturday || week.monday || week.other;
+      }).filter(Boolean);
+
+    } else if (granularity === 'monthly') {
+      // Group by month, taking last day of each month
+      const monthlyData = {};
+
+      dailyResult.rows.forEach(row => {
+        const date = new Date(row.date);
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+        // Keep the latest date in each month
+        if (!monthlyData[monthKey] || new Date(row.date) > new Date(monthlyData[monthKey].date)) {
+          monthlyData[monthKey] = row;
+        }
+      });
+
+      finalResult = Object.keys(monthlyData).sort().map(key => monthlyData[key]);
+    }
+
+    res.json(finalResult);
   } catch (error) {
     console.error('Error fetching trend data:', error);
     res.status(500).json({ error: error.message });
