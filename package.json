@@ -6,6 +6,7 @@
     "start": "node server.js",
     "db:setup": "psql balance_tracker < db/schema.sql && psql balance_tracker < db/load_test_data.sql && node db/refresh_exchange_rate.js",
     "db:reset": "psql balance_tracker < db/schema.sql",
+    "db:load": "psql balance_tracker < db/load_test_data.sql",
     "db:migrate": "psql balance_tracker < db/add_exchange_rates.sql",
     "db:migrate-rates": "psql balance_tracker < db/add_rate_to_snapshots.sql",
     "db:migrate-null": "psql balance_tracker < db/allow_null_balances.sql",
