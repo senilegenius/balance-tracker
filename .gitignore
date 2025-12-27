@@ -1,7 +1,6 @@
 # OS files
 .DS_Store
 Thumbs.db
-PostgreSQL Setup Guide.pdf
 
 # Editor files
 .vscode/settings.json
@@ -11,12 +10,21 @@ PostgreSQL Setup Guide.pdf
 # Temporary files
 *.tmp
 *.temp
+*.log
+npm-debug.log*
+backup_*.sql
 
 # Keep config.js out of git (generated during build)
 config.js
 node_modules/
 .env
+.env.local
+.env.production
 plaid-token.json
+
+# Private data
+db/add_snapshot.sql
+db/load_test_data.sql
 
 # But allow template and build files
 !config.template.js
