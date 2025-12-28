@@ -1,0 +1,1491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            overflow-x: hidden;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            transition: filter 0.3s ease;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+       .refresh-btn {
+           background: #667eea;
+           color: white;
+           border: none;
+           padding: 10px 20px;
+           border-radius: 8px;
+           cursor: pointer;
+           font-size: 0.9rem;
+           font-weight: 600;
+           transition: background 0.2s;
+       }
+
+       .refresh-btn:hover {
+           background: #5568d3;
+       }
+
+       .refresh-btn:disabled {
+           background: #95a5a6;
+           cursor: not-allowed;
+       }
+
+        .summary-panel {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .card.primary {
+            grid-column: span 4;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .card-label {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-bottom: 8px;
+        }
+
+        .card-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .card-change {
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .card-change.positive {
+            color: #27ae60;
+        }
+
+        .card-change.negative {
+            color: #e74c3c;
+        }
+
+        .primary .card-change {
+            color: rgba(255,255,255,0.9);
+        }
+
+        .balances-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-bottom: 30px;
+        }
+
+        .balances-panel h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+
+        .institution {
+            margin-bottom: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .institution-header {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .institution-header:hover {
+            background: #e9ecef;
+        }
+
+        .institution-accounts {
+            padding: 10px;
+        }
+
+        .account-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 100px;
+            padding: 12px 20px;
+            align-items: center;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .account-row:hover {
+            background: #f8f9fa;
+        }
+
+        .account-row:last-child {
+            border-bottom: none;
+        }
+
+        .account-name {
+            color: #2c3e50;
+            font-weight: 500;
+        }
+
+        .account-name.old {
+            color: #95a5a6;
+            font-style: italic;
+        }
+
+        .account-type {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+
+        .account-balance {
+            text-align: right;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .account-balance.positive {
+            color: #27ae60;
+        }
+
+        .account-balance.negative {
+            color: #e74c3c;
+        }
+
+        .view-history {
+            text-align: right;
+            color: #667eea;
+            font-size: 0.9rem;
+        }
+
+        .chevron {
+            transition: transform 0.3s;
+        }
+
+        .chevron.open {
+            transform: rotate(180deg);
+        }
+
+        .institution-accounts.collapsed {
+            display: none;
+        }
+
+        .liability-note {
+            background: #fff3cd;
+            padding: 10px 20px;
+            border-left: 4px solid #ffc107;
+            margin: 10px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            color: #856404;
+        }
+
+        .chart-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-bottom: 30px;
+        }
+
+        .chart-panel h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+
+        .date-range-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .date-range-btn {
+            padding: 8px 16px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .date-range-btn:hover {
+            background: #f8f9fa;
+        }
+
+        .date-range-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            width: 100%;
+        }
+
+        .side-panel-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+
+        .side-panel-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .side-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 600px;
+            background: white;
+            box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            overflow-y: auto;
+        }
+
+        .side-panel-overlay.show .side-panel {
+            transform: translateX(0);
+        }
+
+        .side-panel-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .close-button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+            line-height: 1;
+        }
+
+        .close-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .account-title {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .account-subtitle {
+            opacity: 0.9;
+            font-size: 1rem;
+        }
+
+        .side-panel-content {
+            padding: 30px;
+        }
+
+        .history-chart-section {
+            margin-bottom: 30px;
+        }
+
+        .history-chart-section h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.3rem;
+        }
+
+        .history-chart-container {
+            height: 300px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .history-stats-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .history-stats-section h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+        }
+
+        .stats-row {
+            color: #2c3e50;
+            font-size: 0.95rem;
+            line-height: 2;
+        }
+
+        .stat-label {
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .stat-value {
+            font-weight: 500;
+        }
+
+        .stat-value.positive {
+            color: #27ae60;
+        }
+
+        .stat-value.negative {
+            color: #e74c3c;
+        }
+
+        .manual-balance-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .manual-balance-modal.show {
+            display: flex;
+        }
+
+        .manual-balance-content {
+            background: white;
+            border-radius: 16px;
+            max-width: 600px;
+            width: 100%;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .manual-balance-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 24px;
+            border-radius: 16px 16px 0 0;
+            position: relative;
+        }
+
+        .manual-balance-header h2 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+
+        .manual-balance-header p {
+            margin: 8px 0 0 0;
+            opacity: 0.9;
+            font-size: 0.9rem;
+        }
+
+        .manual-balance-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            font-size: 1.3rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+
+        .manual-balance-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .manual-balance-body {
+            padding: 24px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .manual-account-item {
+            margin-bottom: 24px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .manual-account-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+
+        .manual-account-name {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 4px;
+            font-size: 1rem;
+        }
+
+        .manual-account-current {
+            color: #7f8c8d;
+            font-size: 0.85rem;
+            margin-bottom: 8px;
+        }
+
+        .manual-account-input-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .manual-account-input {
+            flex: 1;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-family: monospace;
+        }
+
+        .manual-account-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .manual-account-currency {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+            font-weight: 600;
+            min-width: 40px;
+        }
+
+        .liability-help {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 12px;
+            border-radius: 4px;
+            margin-top: 16px;
+            font-size: 0.85rem;
+            color: #856404;
+        }
+
+        .manual-balance-footer {
+            padding: 20px 24px;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .manual-balance-btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .manual-balance-btn.cancel {
+            background: #f8f9fa;
+            color: #2c3e50;
+        }
+
+        .manual-balance-btn.cancel:hover {
+            background: #e9ecef;
+        }
+
+        .manual-balance-btn.save {
+            background: #667eea;
+            color: white;
+        }
+
+        .manual-balance-btn.save:hover {
+            background: #5568d3;
+        }
+
+        .manual-balance-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        @media (max-width: 1200px) {
+            .summary-panel {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .card.primary {
+                grid-column: span 2;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .summary-panel {
+                grid-template-columns: 1fr;
+            }
+
+            .card.primary {
+                grid-column: span 1;
+            }
+
+            .account-row {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+
+            .side-panel {
+                width: 100%;
+            }
+
+            .manual-balance-content {
+                max-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>
+            💰 Financial Dashboard
+            <div class="header-actions">
+                <button class="refresh-btn" id="refreshBtn" onclick="refreshBalances()">🔄 Refresh Balances</button>
+            </div>
+        </h1>
+
+        <div class="summary-panel">
+            <div class="card primary">
+                <div class="card-label">CAD Liquid Minus CC Debt</div>
+                <div class="card-value">Loading...</div>
+                <div class="card-change"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-label">Total CAD Accounts</div>
+                <div class="card-value">Loading...</div>
+                <div class="card-change"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-label">Total CC Debt (CAD)</div>
+                <div class="card-value">Loading...</div>
+                <div class="card-change"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-label">Total USD Accounts</div>
+                <div class="card-value">Loading...</div>
+                <div class="card-change"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-label">Total CC Debt (USD)</div>
+                <div class="card-value">Loading...</div>
+                <div class="card-change"></div>
+            </div>
+        </div>
+
+        <div class="balances-panel">
+            <h2>Current Account Balances <span style="color: #7f8c8d; font-size: 0.9rem; font-weight: normal;">Loading...</span></h2>
+        </div>
+
+        <div class="chart-panel">
+            <h2>Liquid Cash Trend</h2>
+            <div class="date-range-selector">
+                <button class="date-range-btn" onclick="setDateRange('7d')">Last 7 Days</button>
+                <button class="date-range-btn" onclick="setDateRange('30d')">Last 30 Days</button>
+                <button class="date-range-btn active" onclick="setDateRange('90d')">Last 90 Days</button>
+                <button class="date-range-btn" onclick="setDateRange('all')">All Time</button>
+            </div>
+            <div class="chart-container">
+                <canvas id="trendChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="side-panel-overlay" id="sidePanelOverlay" onclick="closeSidePanel()">
+        <div class="side-panel" onclick="event.stopPropagation()">
+            <div class="side-panel-header">
+                <button class="close-button" onclick="closeSidePanel()">×</button>
+                <div class="account-title" id="panelAccountName">Loading...</div>
+                <div class="account-subtitle" id="panelAccountSubtitle"></div>
+            </div>
+
+            <div class="side-panel-content">
+                <div class="history-chart-section">
+                    <h3>Monthly Balance Trend</h3>
+                    <div class="history-chart-container">
+                        <canvas id="accountHistoryChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="history-stats-section" id="historyStats">
+                    <h3>Last 3 Months Summary</h3>
+                    <div class="stats-row" id="statsContent">
+                        Loading...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manual Balance Entry Modal -->
+    <div class="manual-balance-modal" id="manualBalanceModal">
+        <div class="manual-balance-content">
+            <div class="manual-balance-header">
+                <button class="manual-balance-close" onclick="closeManualBalanceModal()">×</button>
+                <h2>💰 Update Manual Account Balances</h2>
+                <p id="manualModalSubtitle">Enter balances for accounts not managed by Plaid</p>
+            </div>
+
+            <div class="manual-balance-body" id="manualBalanceBody">
+                <!-- Account inputs will be populated here -->
+            </div>
+
+            <div class="manual-balance-footer">
+                <button class="manual-balance-btn cancel" onclick="cancelManualBalances()">Cancel</button>
+                <button class="manual-balance-btn save" onclick="saveManualBalances()">Save Balances</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check auth first
+            fetch('/api/check-auth')
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.authenticated) {
+                        window.location.href = '/login.html';
+                    } else {
+                        loadDashboard();
+                    }
+                })
+                .catch(() => {
+                    window.location.href = '/login.html';
+                });
+        });
+
+        async function loadDashboard() {
+            try {
+                const [summaryData, balancesData] = await Promise.all([
+                    fetch('/api/summary').then(r => r.json()),
+                    fetch('/api/latest_balances').then(r => r.json())
+                ]);
+
+                updateSummaryCards(summaryData);
+                updateAccountBalances(balancesData);
+
+                // Load trend chart with default range (90d)
+                await renderTrendChart('90d');
+
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+                alert('Error loading dashboard data. Please check the console.');
+            }
+        }
+
+        function updateSummaryCards(data) {
+            document.querySelector('.card.primary .card-value').textContent = formatCurrency(data.liquidCashCad);
+
+            const liquidChange = data.liquidChange;
+            const liquidChangeEl = document.querySelector('.card.primary .card-change');
+            liquidChangeEl.textContent = (liquidChange >= 0 ? '▲' : '▼') + ' ' + formatCurrency(Math.abs(liquidChange)) + ' from last update (' + formatDate(data.previousDate) + ')';
+            liquidChangeEl.className = 'card-change ' + (liquidChange >= 0 ? 'positive' : 'negative');
+
+            const cards = document.querySelectorAll('.card:not(.primary)');
+
+            cards[0].querySelector('.card-value').textContent = formatCurrency(data.totalCad);
+            const cadChange = data.previousTotalCad ? data.totalCad - data.previousTotalCad : 0;
+            cards[0].querySelector('.card-change').textContent = (cadChange >= 0 ? '▲' : '▼') + ' ' + formatCurrency(Math.abs(cadChange));
+            cards[0].querySelector('.card-change').className = 'card-change ' + (cadChange >= 0 ? 'positive' : 'negative');
+
+            cards[1].querySelector('.card-value').textContent = formatCurrency(data.ccDebtCad);
+            const cadCcChange = data.previousCcDebtCad ? data.ccDebtCad - data.previousCcDebtCad : 0;
+            cards[1].querySelector('.card-change').textContent = (cadCcChange >= 0 ? '▲' : '▼') + ' ' + formatCurrency(Math.abs(cadCcChange));
+            cards[1].querySelector('.card-change').className = 'card-change ' + (cadCcChange >= 0 ? 'positive' : 'negative');
+
+            cards[2].querySelector('.card-value').textContent = formatCurrency(data.totalUsd);
+            const usdChange = data.previousTotalUsd ? data.totalUsd - data.previousTotalUsd : 0;
+            cards[2].querySelector('.card-change').textContent = (usdChange >= 0 ? '▲' : '▼') + ' ' + formatCurrency(Math.abs(usdChange));
+            cards[2].querySelector('.card-change').className = 'card-change ' + (usdChange >= 0 ? 'positive' : 'negative');
+
+            cards[3].querySelector('.card-value').textContent = formatCurrency(data.ccDebtUsd);
+            const usdCcChange = data.previousCcDebtUsd ? data.ccDebtUsd - data.previousCcDebtUsd : 0;
+            cards[3].querySelector('.card-change').textContent = (usdCcChange >= 0 ? '▲' : '▼') + ' ' + formatCurrency(Math.abs(usdCcChange));
+            cards[3].querySelector('.card-change').className = 'card-change ' + (usdCcChange >= 0 ? 'positive' : 'negative');
+
+            document.querySelector('.balances-panel h2 span').textContent = 'as of ' + formatDate(data.date);
+        }
+
+        function updateAccountBalances(data) {
+            // Define old account IDs that need warning labels
+            const oldAccountIds = [5, 6, 7, 8, 14, 16];
+
+            // Group accounts by type and currency
+            const grouped = {};
+            data.accounts.forEach(account => {
+                let sectionName;
+
+                // Determine which section this account belongs to
+                if (account.is_liability) {
+                    sectionName = 'Liabilities';
+                } else if (account.account_type === 'credit' || account.account_type === 'credit card') {
+                    sectionName = account.currency === 'CAD' ? 'CAD Credit Cards' : 'USD Credit Cards';
+                } else if (account.account_type === 'checking') {
+                    sectionName = account.currency === 'CAD' ? 'CAD Checking Accounts' : 'USD Checking Accounts';
+                } else if (account.account_type === 'savings') {
+                    sectionName = account.currency === 'CAD' ? 'CAD Savings Accounts' : 'USD Savings Accounts';
+                } else {
+                    sectionName = 'Other Accounts';
+                }
+
+                if (!grouped[sectionName]) {
+                    grouped[sectionName] = [];
+                }
+                grouped[sectionName].push(account);
+            });
+
+            // Sort accounts within each section: new first, old last
+            Object.keys(grouped).forEach(sectionName => {
+                grouped[sectionName].sort((a, b) => {
+                    const aIsOld = oldAccountIds.includes(a.id);
+                    const bIsOld = oldAccountIds.includes(b.id);
+
+                    // Old accounts go to end
+                    if (aIsOld && !bIsOld) return 1;
+                    if (!aIsOld && bIsOld) return -1;
+
+                    // Within same group (both old or both new), maintain original order by ID
+                    return a.id - b.id;
+                });
+            });
+
+            const balancesPanel = document.querySelector('.balances-panel');
+            const institutions = balancesPanel.querySelectorAll('.institution');
+            institutions.forEach(inst => inst.remove());
+
+            // Define section order and display names
+            const sectionOrder = [
+                'CAD Checking Accounts',
+                'CAD Savings Accounts',
+                'USD Checking Accounts',
+                'USD Savings Accounts',
+                'CAD Credit Cards',
+                'USD Credit Cards',
+                'Liabilities',
+                'Other Accounts'
+            ];
+
+            const displayNames = {
+                'CAD Checking Accounts': 'CAD Checking Accounts',
+                'CAD Savings Accounts': 'CAD Savings Accounts',
+                'USD Checking Accounts': 'USD Checking Accounts',
+                'USD Savings Accounts': 'USD Savings Accounts',
+                'CAD Credit Cards': 'CAD Credit Cards',
+                'USD Credit Cards': 'USD Credit Cards',
+                'Liabilities': 'Liabilities (Not Included in Liquid Cash)',
+                'Other Accounts': 'Other Accounts'
+            };
+
+            sectionOrder.forEach(sectionName => {
+                if (!grouped[sectionName]) return;
+
+                const sectionDiv = document.createElement('div');
+                sectionDiv.className = 'institution';
+
+                const headerName = displayNames[sectionName] || sectionName;
+
+                const header = document.createElement('div');
+                header.className = 'institution-header';
+                header.onclick = function() { toggleInstitution(this); };
+                header.innerHTML = '<span>' + headerName + '</span><span class="chevron ' + (sectionName === 'Liabilities' ? 'open' : '') + '">▼</span>';
+
+                const accountsDiv = document.createElement('div');
+                accountsDiv.className = 'institution-accounts' + (sectionName === 'Liabilities' ? ' collapsed' : '');
+
+                if (sectionName === 'Liabilities') {
+                    const note = document.createElement('div');
+                    note.className = 'liability-note';
+                    note.textContent = 'ℹ️ These accounts are tracked but do not affect your liquid cash total';
+                    accountsDiv.appendChild(note);
+                }
+
+                grouped[sectionName].forEach(account => {
+                    const accountRow = document.createElement('div');
+                    accountRow.className = 'account-row';
+                    accountRow.onclick = function() { showHistory(account.id, account.account_name, account.currency, account.account_type); };
+
+                    const isOld = oldAccountIds.includes(account.id);
+                    const displayName = isOld ? '⚠️ Old - ' + account.account_name : account.account_name;
+                    const nameClass = isOld ? 'account-name old' : 'account-name';
+
+                    const balance = parseFloat(account.balance);
+                    const balanceClass = balance < 0 ? 'negative' : (balance > 0 ? 'positive' : '');
+
+                    accountRow.innerHTML = '<div><div class="' + nameClass + '">' + displayName + '</div><div class="account-type">' + account.institution_name + (account.account_mask ? ' • ' + account.account_mask : '') + '</div></div><div></div><div class="account-balance ' + balanceClass + '">' + formatCurrency(Math.abs(balance)) + '</div><div class="view-history">View History →</div>';
+
+                    accountsDiv.appendChild(accountRow);
+                });
+
+                sectionDiv.appendChild(header);
+                sectionDiv.appendChild(accountsDiv);
+                balancesPanel.appendChild(sectionDiv);
+            });
+        }
+
+        let trendChart;
+        let currentGranularity = 'weekly';
+
+        // Calculate linear regression
+        function calculateLinearRegression(xValues, yValues) {
+            const n = xValues.length;
+            if (n < 2) return null;
+
+            const sumX = xValues.reduce((a, b) => a + b, 0);
+            const sumY = yValues.reduce((a, b) => a + b, 0);
+            const sumXY = xValues.reduce((sum, x, i) => sum + x * yValues[i], 0);
+            const sumXX = xValues.reduce((sum, x) => sum + x * x, 0);
+
+            const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+            const intercept = (sumY - slope * sumX) / n;
+
+            return { slope, intercept };
+        }
+
+        async function renderTrendChart(range) {
+            const ctx = document.getElementById('trendChart');
+            if (!ctx) return;
+
+            // Determine granularity based on range
+            let granularity;
+            if (range === 'all') {
+                granularity = 'monthly';
+            } else if (range === '90d') {
+                granularity = 'weekly';
+            } else if (range === '30d') {
+                granularity = 'daily';
+            } else if (range === '7d') {
+                granularity = 'daily';
+            }
+
+            currentGranularity = granularity;
+
+            // Fetch aggregated data for chart display
+            const response = await fetch(`/api/trend_data?granularity=${granularity}`);
+            const data = await response.json();
+
+            // Fetch ALL daily data for trend line calculation (more accurate)
+            const dailyResponse = await fetch(`/api/trend_data?granularity=daily`);
+            const dailyData = await dailyResponse.json();
+
+            // Filter aggregated data by date range
+            let filteredData = data;
+            let filteredDailyData = dailyData;
+
+            if (range !== 'all') {
+                const days = parseInt(range);
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - days);
+
+                filteredData = data.filter(d => new Date(d.date) >= cutoffDate);
+                filteredDailyData = dailyData.filter(d => new Date(d.date) >= cutoffDate);
+            }
+
+            const labels = filteredData.map(d => formatDate(d.date));
+            const values = filteredData.map(d => parseFloat(d.liquid_cash_cad));
+
+            // Calculate trend line using ALL daily data for this range
+            let trendLineData = null;
+            const showTrendLine = range === 'all' || range === '90d' || range === '30d';
+
+            if (showTrendLine && filteredDailyData.length >= 2) {
+                // Convert dates to numeric values (days since first date)
+                const firstDate = new Date(filteredDailyData[0].date);
+                const xValues = filteredDailyData.map(d => {
+                    const daysDiff = (new Date(d.date) - firstDate) / (1000 * 60 * 60 * 24);
+                    return daysDiff;
+                });
+                const yValues = filteredDailyData.map(d => parseFloat(d.liquid_cash_cad));
+
+                const regression = calculateLinearRegression(xValues, yValues);
+
+                if (regression) {
+                    // Create trend line points matching the chart's x-axis (using aggregated data dates)
+                    trendLineData = filteredData.map(d => {
+                        const daysDiff = (new Date(d.date) - firstDate) / (1000 * 60 * 60 * 24);
+                        return regression.slope * daysDiff + regression.intercept;
+                    });
+                }
+            }
+
+            if (trendChart) {
+                trendChart.destroy();
+            }
+
+            const datasets = [{
+                label: 'CAD Liquid Minus CC Debt',
+                data: values,
+                borderColor: '#667eea',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 5,
+                pointHoverRadius: 7,
+                pointBackgroundColor: '#667eea',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2
+            }];
+
+            // Add trend line if calculated
+            if (trendLineData) {
+                datasets.push({
+                    label: 'Trend',
+                    data: trendLineData,
+                    borderColor: 'rgba(149, 165, 166, 0.8)',
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    fill: false,
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    tension: 0
+                });
+            }
+
+            trendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: showTrendLine,
+                            position: 'top',
+                            align: 'end',
+                            labels: {
+                                usePointStyle: true,
+                                boxWidth: 6
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            padding: 12,
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            borderColor: '#667eea',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    if (context.dataset.label === 'Trend') {
+                                        return 'Trend: $' + context.parsed.y.toLocaleString('en-US', {
+                                            minimumFractionDigits: 2,
+                                            maximumFractionDigits: 2
+                                        });
+                                    }
+                                    return '$' + context.parsed.y.toLocaleString('en-US', {
+                                        minimumFractionDigits: 2,
+                                        maximumFractionDigits: 2
+                                    });
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value.toLocaleString();
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0,0,0,0.05)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                    }
+                }
+            });
+        }
+
+        function formatCurrency(value) {
+            return '$' + parseFloat(value).toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            const month = date.getMonth() + 1;
+            const day = date.getDate();
+            const year = date.getFullYear().toString().slice(-2);
+            return month + '/' + day + '/' + year;
+        }
+
+        function toggleInstitution(header) {
+            const accounts = header.nextElementSibling;
+            const chevron = header.querySelector('.chevron');
+
+            accounts.classList.toggle('collapsed');
+            chevron.classList.toggle('open');
+        }
+
+        function setDateRange(range) {
+            // Update button styles
+            document.querySelectorAll('.date-range-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            event.target.classList.add('active');
+
+            // Re-render chart with selected range
+            renderTrendChart(range);
+        }
+
+        let accountHistoryChart;
+
+        function showHistory(accountId, accountName, currency, accountType) {
+            openAccountHistory(accountId, accountName, currency, accountType);
+        }
+
+        async function openAccountHistory(accountId, accountName, currency, accountType) {
+            try {
+                document.getElementById('sidePanelOverlay').classList.add('show');
+                document.querySelector('.container').style.filter = 'blur(3px) brightness(0.7)';
+
+                const typeLabel = accountType === 'credit' || accountType === 'credit card' ? 'Credit Card' :
+                                 accountType === 'checking' ? 'Checking Account' :
+                                 accountType === 'savings' ? 'Savings Account' :
+                                 accountType.charAt(0).toUpperCase() + accountType.slice(1);
+
+                document.getElementById('panelAccountName').textContent = accountName;
+                document.getElementById('panelAccountSubtitle').textContent = currency + ' ' + typeLabel + ' • Monthly Trend';
+
+                const response = await fetch('/api/account_history/' + accountId);
+                const data = await response.json();
+
+                if (!data.monthlyData || data.monthlyData.length === 0) {
+                    document.getElementById('statsContent').innerHTML = 'No history available for this account.';
+                    return;
+                }
+
+                if (data.stats) {
+                    const changeClass = data.stats.totalChange >= 0 ? 'positive' : 'negative';
+                    const changeSign = data.stats.totalChange >= 0 ? '+' : '';
+
+                    document.getElementById('statsContent').innerHTML =
+                        '<span class="stat-label">Minimum:</span> <span class="stat-value">' + formatCurrency(data.stats.min) + '</span> <span style="color: #95a5a6;">(' + formatDate(data.stats.minDate) + ')</span>' +
+                        '<br>' +
+                        '<span class="stat-label">Maximum:</span> <span class="stat-value">' + formatCurrency(data.stats.max) + '</span> <span style="color: #95a5a6;">(' + formatDate(data.stats.maxDate) + ')</span>' +
+                        '<br>' +
+                        '<span class="stat-label">Total Change:</span> <span class="stat-value ' + changeClass + '">' + changeSign + formatCurrency(Math.abs(data.stats.totalChange)) + '</span> <span style="color: #95a5a6;">(3 months)</span>';
+                } else {
+                    document.getElementById('statsContent').innerHTML = 'Not enough data for statistics.';
+                }
+
+                const labels = data.monthlyData.map(d => d.month);
+                const balances = data.monthlyData.map(d => d.balance);
+
+                const ctx2 = document.getElementById('accountHistoryChart');
+
+                if (accountHistoryChart) {
+                    accountHistoryChart.destroy();
+                }
+
+                accountHistoryChart = new Chart(ctx2, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Balance',
+                            data: balances,
+                            borderColor: '#667eea',
+                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 6,
+                            pointHoverRadius: 8,
+                            pointBackgroundColor: '#667eea',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                                backgroundColor: 'rgba(0,0,0,0.8)',
+                                padding: 12,
+                                callbacks: {
+                                    title: function(context) {
+                                        return context[0].label;
+                                    },
+                                    label: function(context) {
+                                        return 'Balance: $' + context.parsed.y.toLocaleString('en-US', {
+                                            minimumFractionDigits: 2,
+                                            maximumFractionDigits: 2
+                                        });
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                ticks: {
+                                    callback: function(value) {
+                                        return '$' + value.toLocaleString();
+                                    }
+                                },
+                                grid: {
+                                    color: 'rgba(0,0,0,0.05)'
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    display: false
+                                }
+                            }
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error('Error loading account history:', error);
+                alert('Error loading account history');
+            }
+        }
+
+        function closeSidePanel() {
+            document.getElementById('sidePanelOverlay').classList.remove('show');
+            document.querySelector('.container').style.filter = '';
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeSidePanel();
+            }
+        });
+
+        let plaidRefreshResult = null;
+        let plaidRefreshPromise = null;
+
+        async function refreshBalances() {
+            const btn = document.getElementById('refreshBtn');
+
+            btn.disabled = true;
+            btn.textContent = '⏳ Refreshing...';
+
+            try {
+                // Step 1: Check for manual accounts FIRST (fast query)
+                const manualAccountsResponse = await fetch('/api/manual_accounts');
+                const manualAccounts = await manualAccountsResponse.json();
+
+                // Step 2: Start Plaid refresh in background (don't await yet)
+                plaidRefreshPromise = fetch('/api/refresh_balances', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                }).then(r => r.json());
+
+                // Step 3: Show manual modal immediately if needed
+                if (manualAccounts.length > 0) {
+                    // Get exchange rate for modal display
+                    const rateResponse = await fetch('/api/exchange_rate');
+                    const rateData = await rateResponse.json();
+                    const today = new Date().toLocaleDateString('en-CA');
+
+                    // Show modal NOW (Plaid still running in background)
+                    showManualBalanceModal(manualAccounts, today, rateData.rate);
+
+                    // Store the result when Plaid finishes
+                    plaidRefreshPromise.then(result => {
+                        plaidRefreshResult = result;
+                    }).catch(error => {
+                        console.error('Background Plaid refresh failed:', error);
+                    });
+                } else {
+                    // No manual accounts, wait for Plaid and show success
+                    const result = await plaidRefreshPromise;
+                    if (result.success) {
+                        showFinalSuccess(result);
+                    } else {
+                        alert('❌ Failed to refresh Plaid accounts.');
+                    }
+                    btn.disabled = false;
+                    btn.textContent = '🔄 Refresh Balances';
+                }
+
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+                btn.disabled = false;
+                btn.textContent = '🔄 Refresh Balances';
+            }
+        }
+
+        function showManualBalanceModal(accounts, date, exchangeRate) {
+            const modal = document.getElementById('manualBalanceModal');
+            const body = document.getElementById('manualBalanceBody');
+            const subtitle = document.getElementById('manualModalSubtitle');
+
+            subtitle.textContent = `Date: ${date}  |  Exchange Rate: ${exchangeRate.toFixed(4)}`;
+
+            // Build the form
+            body.innerHTML = '';
+
+            let hasLiabilities = false;
+
+            accounts.forEach(account => {
+                if (account.is_liability) hasLiabilities = true;
+
+                const item = document.createElement('div');
+                item.className = 'manual-account-item';
+
+                const lastBalance = account.last_balance !== null ? Math.abs(parseFloat(account.last_balance)) : '';
+
+                item.innerHTML = `
+                    <div class="manual-account-name">${account.account_name}</div>
+                    <div class="manual-account-current">
+                        ${account.account_type} • ${account.currency}
+                        ${account.last_balance !== null ? ` • Current: ${formatCurrency(account.last_balance)}` : ''}
+                    </div>
+                    <div class="manual-account-input-group">
+                        <input
+                            type="number"
+                            step="0.01"
+                            class="manual-account-input"
+                            id="manual-input-${account.id}"
+                            data-account-id="${account.id}"
+                            data-is-liability="${account.is_liability}"
+                            value="${lastBalance}"
+                            placeholder="Enter balance"
+                        >
+                        <span class="manual-account-currency">${account.currency}</span>
+                    </div>
+                `;
+
+                body.appendChild(item);
+            });
+
+            // Add liability help note if needed
+            if (hasLiabilities) {
+                const helpNote = document.createElement('div');
+                helpNote.className = 'liability-help';
+                helpNote.innerHTML = 'ℹ️ <strong>Liability accounts:</strong> Enter positive numbers (e.g., 15606.10). They will be saved as negative automatically.';
+                body.appendChild(helpNote);
+            }
+
+            modal.classList.add('show');
+        }
+
+        function closeManualBalanceModal() {
+            document.getElementById('manualBalanceModal').classList.remove('show');
+        }
+
+        function cancelManualBalances() {
+            closeManualBalanceModal();
+
+            // Wait for Plaid to finish before showing success
+            if (plaidRefreshPromise) {
+                plaidRefreshPromise.then(result => {
+                    if (result.success) {
+                        showFinalSuccess(result);
+                    }
+                }).catch(error => {
+                    console.error('Plaid refresh error:', error);
+                });
+            }
+
+            // Re-enable refresh button
+            const btn = document.getElementById('refreshBtn');
+            btn.disabled = false;
+            btn.textContent = '🔄 Refresh Balances';
+        }
+
+        async function saveManualBalances() {
+            const saveBtn = document.querySelector('.manual-balance-btn.save');
+            const cancelBtn = document.querySelector('.manual-balance-btn.cancel');
+
+            // Disable buttons
+            saveBtn.disabled = true;
+            cancelBtn.disabled = true;
+
+            const inputs = document.querySelectorAll('.manual-account-input');
+            const manualBalances = {};
+
+            inputs.forEach(input => {
+                const accountId = input.dataset.accountId;
+                const value = input.value.trim();
+
+                if (value !== '') {
+                    manualBalances[accountId] = value;
+                }
+            });
+
+            try {
+                // Wait for Plaid to finish first
+                saveBtn.textContent = 'Waiting for Plaid refresh...';
+                const plaidResult = await plaidRefreshPromise;
+
+                if (!plaidResult.success) {
+                    alert('❌ Plaid refresh failed. Manual balances not saved.');
+                    saveBtn.disabled = false;
+                    cancelBtn.disabled = false;
+                    saveBtn.textContent = 'Save Balances';
+                    return;
+                }
+
+                // Now save manual balances
+                saveBtn.textContent = 'Saving manual balances...';
+                const response = await fetch('/api/refresh_balances', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ manualBalances })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    closeManualBalanceModal();
+
+                    // Combine totals from both calls
+                    const combinedResult = {
+                        success: true,
+                        accountsUpdated: plaidResult.accountsUpdated + result.manualAccountsUpdated,
+                        date: result.date,
+                        exchangeRate: result.exchangeRate
+                    };
+
+                    showFinalSuccess(combinedResult);
+                    loadDashboard();
+                } else {
+                    alert('❌ Failed to save manual balances.');
+                    saveBtn.disabled = false;
+                    cancelBtn.disabled = false;
+                    saveBtn.textContent = 'Save Balances';
+                }
+
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+                saveBtn.disabled = false;
+                cancelBtn.disabled = false;
+                saveBtn.textContent = 'Save Balances';
+            } finally {
+                // Re-enable refresh button
+                const btn = document.getElementById('refreshBtn');
+                btn.disabled = false;
+                btn.textContent = '🔄 Refresh Balances';
+            }
+        }
+
+        function showFinalSuccess(result) {
+            alert(`✅ Successfully refreshed ${result.accountsUpdated} accounts!\n\nDate: ${result.date}\nExchange Rate: ${result.exchangeRate.toFixed(4)}`);
+            loadDashboard();
+        }
+    </script>
+</body>
+</html>

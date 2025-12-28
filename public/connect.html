@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connect Bank Account</title>
+    <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 600px;
+            width: 100%;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 2rem;
+        }
+
+        .subtitle {
+            color: #7f8c8d;
+            margin-bottom: 30px;
+            font-size: 1rem;
+        }
+
+        .info {
+            background: #e3f2fd;
+            border: 1px solid #90caf9;
+            padding: 20px;
+            border-radius: 10px;
+            color: #1565c0;
+            margin-bottom: 30px;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        .info strong {
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            width: 100%;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #5568d3;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .success.show {
+            display: block;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .connected-banks {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .connected-banks h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+        }
+
+        .bank-item {
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .bank-name {
+            font-weight: 500;
+            color: #2c3e50;
+        }
+
+        .account-count {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>Connect Bank Account</h1>
+            <p class="subtitle">Link your financial institutions to automatically track balances</p>
+
+            <div class="info">
+                <strong>What happens when you connect:</strong>
+                • Plaid securely authenticates with your bank<br>
+                • Your accounts are added to the database<br>
+                • You can fetch balances automatically<br>
+                • Your credentials never touch this server
+            </div>
+
+            <button id="linkButton">Connect Bank Account</button>
+
+            <div class="success" id="successMessage">
+                <strong>✅ Bank connected successfully!</strong><br>
+                Your accounts have been added to the database.
+            </div>
+
+            <a href="/" class="back-link">← Back to Dashboard</a>
+
+            <div class="connected-banks" id="connectedBanks" style="display: none;">
+                <h3>Connected Banks</h3>
+                <div id="banksList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let linkHandler = null;
+
+        // Load connected banks on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadConnectedBanks();
+        });
+
+        async function loadConnectedBanks() {
+            try {
+                const response = await fetch('/api/accounts');
+                const accounts = await response.json();
+
+                if (accounts.length > 0) {
+                    // Group by institution
+                    const grouped = {};
+                    accounts.forEach(acc => {
+                        if (!grouped[acc.institution_name]) {
+                            grouped[acc.institution_name] = 0;
+                        }
+                        if (acc.is_active) {
+                            grouped[acc.institution_name]++;
+                        }
+                    });
+
+                    // Display connected banks
+                    const banksList = document.getElementById('banksList');
+                    banksList.innerHTML = '';
+
+                    Object.keys(grouped).forEach(institution => {
+                        const item = document.createElement('div');
+                        item.className = 'bank-item';
+                        item.innerHTML = `
+                            <span class="bank-name">${institution}</span>
+                            <span class="account-count">${grouped[institution]} accounts</span>
+                        `;
+                        banksList.appendChild(item);
+                    });
+
+                    document.getElementById('connectedBanks').style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error loading connected banks:', error);
+            }
+        }
+
+        // Initialize Plaid Link
+        async function initializePlaidLink() {
+            try {
+                const response = await fetch('/api/create_link_token', {
+                    method: 'POST',
+                });
+
+                const data = await response.json();
+
+                linkHandler = Plaid.create({
+                    token: data.link_token,
+                    onSuccess: async (public_token, metadata) => {
+                        console.log('Link success!', metadata);
+
+                        // Show loading state
+                        document.getElementById('linkButton').disabled = true;
+                        document.getElementById('linkButton').textContent = 'Connecting...';
+
+                        // Exchange public token for access token
+                        const exchangeResponse = await fetch('/api/exchange_public_token', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ public_token }),
+                        });
+
+                        if (exchangeResponse.ok) {
+                            // Show success message
+                            document.getElementById('successMessage').classList.add('show');
+                            document.getElementById('linkButton').textContent = 'Connect Another Bank';
+                            document.getElementById('linkButton').disabled = false;
+
+                            // Reload connected banks list
+                            loadConnectedBanks();
+                        } else {
+                            alert('Error connecting bank. Please try again.');
+                            document.getElementById('linkButton').disabled = false;
+                            document.getElementById('linkButton').textContent = 'Connect Bank Account';
+                        }
+                    },
+                    onExit: (err, metadata) => {
+                        if (err != null) {
+                            console.error('Link exit with error:', err);
+                        }
+                        document.getElementById('linkButton').disabled = false;
+                    },
+                });
+            } catch (error) {
+                console.error('Error initializing Plaid Link:', error);
+                alert('Error: ' + error.message);
+            }
+        }
+
+        // Connect button click handler
+        document.getElementById('linkButton').addEventListener('click', () => {
+            if (linkHandler) {
+                linkHandler.open();
+            } else {
+                initializePlaidLink().then(() => linkHandler.open());
+            }
+        });
+    </script>
+</body>
+</html>
