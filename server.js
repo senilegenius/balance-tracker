@@ -5,10 +5,57 @@ const express = require('express');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const bcrypt = require('bcrypt');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const cors = require('cors');
 const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid');
 const { Pool } = require('pg');
 
 const app = express();
+
+// Security: Helmet for security headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "https://cdn.plaid.com"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "https://api.exchangerate-api.com", "https://production.plaid.com", "https://cdn.jsdelivr.net"],
+      frameSrc: ["https://cdn.plaid.com"]
+    }
+  }
+}));
+
+// Security: CORS - only allow your domain
+const allowedOrigins = process.env.NODE_ENV === 'production'
+  ? [process.env.ALLOWED_ORIGIN || 'https://yourdomain.com']
+  : ['http://localhost:3000'];
+
+app.use(cors({
+  origin: function(origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
+// Security: Force HTTPS in production
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    if (req.header('x-forwarded-proto') !== 'https') {
+      res.redirect(`https://${req.header('host')}${req.url}`);
+    } else {
+      next();
+    }
+  });
+}
+
 app.use(express.json());
 
 // Initialize PostgreSQL connection pool
@@ -29,7 +76,7 @@ app.use(session({
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     httpOnly: true, // Prevent JavaScript access
     secure: process.env.NODE_ENV === 'production', // HTTPS only in production
-    sameSite: 'lax'
+    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
   }
 }));
 
@@ -133,8 +180,17 @@ function requireAuthPage(req, res, next) {
 // AUTHENTICATION ENDPOINTS
 // ===========================================
 
+// Security: Rate limiting for login endpoint
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 attempts per window
+  message: 'Too many login attempts, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Login endpoint
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', loginLimiter, async (req, res) => {
   try {
     const { username, password } = req.body;
 
