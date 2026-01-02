@@ -18,7 +18,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"], // Inline styles in HTML
       scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "https://cdn.plaid.com"],
       imgSrc: ["'self'", "data:", "https:"],
       connectSrc: ["'self'", "https://api.exchangerate-api.com", "https://production.plaid.com", "https://cdn.jsdelivr.net"],
@@ -27,16 +27,18 @@ app.use(helmet({
   }
 }));
 
-// Security: CORS - only allow your domain
+// Security: CORS - only allow your domain(s)
 const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? [process.env.ALLOWED_ORIGIN || 'https://yourdomain.com']
+  ? (process.env.ALLOWED_ORIGIN || '').split(',').map(origin => origin.trim()).filter(Boolean)
   : ['http://localhost:3000'];
 
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (mobile apps, curl, etc.)
+    // Allow requests with no origin (mobile apps, curl, server-to-server)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1) {
+
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
