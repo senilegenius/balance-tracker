@@ -13,6 +13,10 @@ const { Pool } = require('pg');
 
 const app = express();
 
+// Trust proxy - required for Render, Azure, and other cloud platforms
+// This allows Express to correctly identify client IPs from X-Forwarded-* headers
+app.set('trust proxy', 1);
+
 // Security: Helmet for security headers
 app.use(helmet({
   contentSecurityPolicy: {
