@@ -80,7 +80,7 @@ app.use(session({
   saveUninitialized: false,
   rolling: true, // Reset expiration on every request (idle timeout)
   cookie: {
-    maxAge: 25 * 60 * 1000, // 30 minutes of inactivity
+    maxAge: 25 * 60 * 1000, // 25 minutes of inactivity
     httpOnly: true, // Prevent JavaScript access
     secure: process.env.NODE_ENV === 'production', // HTTPS only in production
     sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
