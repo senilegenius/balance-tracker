@@ -75,11 +75,12 @@ app.use(session({
     pool: pool,
     tableName: 'session'
   }),
-  secret: process.env.SESSION_SECRET || 'your-secret-key-change-this',
+  secret: process.env.SESSION_SECRET || 'session-secret-key-change-this',
   resave: false,
   saveUninitialized: false,
+  rolling: true, // Reset expiration on every request (idle timeout)
   cookie: {
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    maxAge: 25 * 60 * 1000, // 25 minutes of inactivity
     httpOnly: true, // Prevent JavaScript access
     secure: process.env.NODE_ENV === 'production', // HTTPS only in production
     sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
