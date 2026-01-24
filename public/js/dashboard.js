@@ -254,59 +254,81 @@ async function renderTrendChart(range) {
         granularity = 'monthly';
     } else if (range === '90d') {
         granularity = 'weekly';
-    } else if (range === '30d') {
-        granularity = 'daily';
-    } else if (range === '7d') {
-        granularity = 'daily';
+    } else {
+        granularity = 'daily';  // Both '30d' and '7d' use daily
     }
 
     currentGranularity = granularity;
 
-    // Fetch aggregated data for chart display
+    // Fetch aggregated data from server
     const response = await fetch(`/api/trend_data?granularity=${granularity}`);
-    const data = await response.json();
+    const allData = await response.json();
 
-    // Fetch ALL daily data for trend line calculation (more accurate)
-    const dailyResponse = await fetch(`/api/trend_data?granularity=daily`);
-    const dailyData = await dailyResponse.json();
-
-    // Filter aggregated data by date range
-    let filteredData = data;
-    let filteredDailyData = dailyData;
+    // Filter data by date range (client-side)
+    let filteredData = allData;
 
     if (range !== 'all') {
         const days = parseInt(range);
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - days);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-        filteredData = data.filter(d => new Date(d.date) >= cutoffDate);
-        filteredDailyData = dailyData.filter(d => new Date(d.date) >= cutoffDate);
+        const cutoffDate = new Date(today);
+        cutoffDate.setDate(today.getDate() - days);
+
+        filteredData = allData.filter(d => {
+            const rowDate = new Date(d.date);
+            rowDate.setHours(0, 0, 0, 0);
+            return rowDate >= cutoffDate;
+        });
     }
 
     const labels = filteredData.map(d => formatDate(d.date));
     const values = filteredData.map(d => parseFloat(d.liquid_cash_cad));
 
-    // Calculate trend line using ALL daily data for this range
+    // Fetch ALL daily data for trend line calculation (more accurate)
     let trendLineData = null;
     const showTrendLine = range === 'all' || range === '90d' || range === '30d';
 
-    if (showTrendLine && filteredDailyData.length >= 2) {
-        // Convert dates to numeric values (days since first date)
-        const firstDate = new Date(filteredDailyData[0].date);
-        const xValues = filteredDailyData.map(d => {
-            const daysDiff = (new Date(d.date) - firstDate) / (1000 * 60 * 60 * 24);
-            return daysDiff;
-        });
-        const yValues = filteredDailyData.map(d => parseFloat(d.liquid_cash_cad));
+    if (showTrendLine && filteredData.length >= 2) {
+        // Fetch daily data for trend calculation
+        const dailyResponse = await fetch(`/api/trend_data?granularity=daily`);
+        const dailyData = await dailyResponse.json();
 
-        const regression = calculateLinearRegression(xValues, yValues);
+        // Filter daily data by same date range
+        let filteredDailyData = dailyData;
+        if (range !== 'all') {
+            const days = parseInt(range);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
 
-        if (regression) {
-            // Create trend line points matching the chart's x-axis (using aggregated data dates)
-            trendLineData = filteredData.map(d => {
-                const daysDiff = (new Date(d.date) - firstDate) / (1000 * 60 * 60 * 24);
-                return regression.slope * daysDiff + regression.intercept;
+            const cutoffDate = new Date(today);
+            cutoffDate.setDate(today.getDate() - days);
+
+            filteredDailyData = dailyData.filter(d => {
+                const rowDate = new Date(d.date);
+                rowDate.setHours(0, 0, 0, 0);
+                return rowDate >= cutoffDate;
             });
+        }
+
+        if (filteredDailyData.length >= 2) {
+            // Convert dates to numeric values (days since first date)
+            const firstDate = new Date(filteredDailyData[0].date);
+            const xValues = filteredDailyData.map(d => {
+                const daysDiff = (new Date(d.date) - firstDate) / (1000 * 60 * 60 * 24);
+                return daysDiff;
+            });
+            const yValues = filteredDailyData.map(d => parseFloat(d.liquid_cash_cad));
+
+            const regression = calculateLinearRegression(xValues, yValues);
+
+            if (regression) {
+                // Create trend line points matching the chart's x-axis (using aggregated data dates)
+                trendLineData = filteredData.map(d => {
+                    const daysDiff = (new Date(d.date) - firstDate) / (1000 * 60 * 60 * 24);
+                    return regression.slope * daysDiff + regression.intercept;
+                });
+            }
         }
     }
 

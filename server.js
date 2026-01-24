@@ -548,16 +548,31 @@ app.get('/api/summary', async (req, res) => {
 });
 
 // Get balance history for trend chart
+// Get balance history for trend chart
 app.get('/api/trend_data', async (req, res) => {
   try {
     const granularity = req.query.granularity || 'daily';
 
-    // First, get all daily data points
+    // Step 1: Generate complete daily series with carried-forward balances
     const dailyResult = await pool.query(`
-      WITH all_dates AS (
-        SELECT DISTINCT date FROM balance_snapshots ORDER BY date
+      WITH
+      -- Get the date range
+      date_range AS (
+        SELECT
+          MIN(date) as first_date,
+          CURRENT_DATE as last_date
+        FROM balance_snapshots
       ),
-      account_date_balances AS (
+
+      -- Generate ALL calendar days from first snapshot to today
+      all_calendar_days AS (
+        SELECT date::date as date
+        FROM date_range,
+             generate_series(first_date, last_date, '1 day'::interval) as date
+      ),
+
+      -- For each (day, account), carry forward the most recent balance
+      daily_account_balances AS (
         SELECT
           d.date,
           a.id as account_id,
@@ -578,88 +593,110 @@ app.get('/api/trend_data', async (req, res) => {
             ORDER BY b.date DESC
             LIMIT 1
           ) as rate
-        FROM all_dates d
+        FROM all_calendar_days d
         CROSS JOIN accounts a
         WHERE a.is_active = true
       ),
+
+      -- Aggregate to daily totals (sum across all accounts)
       daily_totals AS (
         SELECT
           date,
           MAX(rate) as rate,
-          SUM(CASE WHEN currency = 'CAD' AND is_liability = false AND account_type != 'credit' AND account_type != 'credit card' AND balance IS NOT NULL THEN balance ELSE 0 END) as total_cad,
-          SUM(CASE WHEN currency = 'USD' AND is_liability = false AND account_type != 'credit' AND account_type != 'credit card' AND balance IS NOT NULL THEN balance ELSE 0 END) as total_usd,
-          SUM(CASE WHEN currency = 'CAD' AND (account_type = 'credit' OR account_type = 'credit card') AND balance IS NOT NULL THEN balance ELSE 0 END) as cc_debt_cad,
-          SUM(CASE WHEN currency = 'USD' AND (account_type = 'credit' OR account_type = 'credit card') AND balance IS NOT NULL THEN balance ELSE 0 END) as cc_debt_usd
-        FROM account_date_balances
+          SUM(CASE
+            WHEN currency = 'CAD'
+              AND is_liability = false
+              AND account_type != 'credit'
+              AND account_type != 'credit card'
+              AND balance IS NOT NULL
+            THEN balance ELSE 0
+          END) as total_cad,
+          SUM(CASE
+            WHEN currency = 'USD'
+              AND is_liability = false
+              AND account_type != 'credit'
+              AND account_type != 'credit card'
+              AND balance IS NOT NULL
+            THEN balance ELSE 0
+          END) as total_usd,
+          SUM(CASE
+            WHEN currency = 'CAD'
+              AND (account_type = 'credit' OR account_type = 'credit card')
+              AND balance IS NOT NULL
+            THEN balance ELSE 0
+          END) as cc_debt_cad,
+          SUM(CASE
+            WHEN currency = 'USD'
+              AND (account_type = 'credit' OR account_type = 'credit card')
+              AND balance IS NOT NULL
+            THEN balance ELSE 0
+          END) as cc_debt_usd
+        FROM daily_account_balances
         GROUP BY date
-        ORDER BY date
+      ),
+
+      -- Calculate liquid cash for each day
+      daily_liquid_cash AS (
+        SELECT
+          date,
+          total_cad + (total_usd * rate) - ABS(cc_debt_cad) - (ABS(cc_debt_usd) * rate) as liquid_cash_cad
+        FROM daily_totals
       )
-      SELECT
-        date,
-        total_cad + (total_usd * rate) - ABS(cc_debt_cad) - (ABS(cc_debt_usd) * rate) as liquid_cash_cad
-      FROM daily_totals
+
+      SELECT date, liquid_cash_cad
+      FROM daily_liquid_cash
       ORDER BY date
     `);
 
     let finalResult = dailyResult.rows;
 
-    // Apply aggregation based on granularity
+    // Step 2: Apply granularity aggregation
     if (granularity === 'weekly') {
-      // Group by week, preferring Sunday, then Saturday, then Monday
-      const weeklyData = {};
+      // Filter to Sundays only, plus always include today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString().split('T')[0];
 
-      dailyResult.rows.forEach(row => {
-        const date = new Date(row.date);
-        const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
+      finalResult = dailyResult.rows.filter(row => {
+        const rowDate = new Date(row.date);
+        rowDate.setHours(0, 0, 0, 0);
 
-        // Calculate the Sunday of this week
-        const sunday = new Date(date);
-        sunday.setDate(date.getDate() - dayOfWeek);
-        const weekKey = sunday.toISOString().split('T')[0];
-
-        if (!weeklyData[weekKey]) {
-          weeklyData[weekKey] = {
-            sunday: null,
-            saturday: null,
-            monday: null,
-            other: null
-          };
-        }
-
-        // Store by day priority
-        if (dayOfWeek === 0) { // Sunday
-          weeklyData[weekKey].sunday = row;
-        } else if (dayOfWeek === 6) { // Saturday
-          weeklyData[weekKey].saturday = row;
-        } else if (dayOfWeek === 1) { // Monday
-          weeklyData[weekKey].monday = row;
-        } else if (!weeklyData[weekKey].other) {
-          weeklyData[weekKey].other = row;
-        }
+        // Include if it's a Sunday (day 0) OR if it's today
+        return rowDate.getDay() === 0 || row.date === todayStr;
       });
-
-      // Select best day for each week
-      finalResult = Object.keys(weeklyData).sort().map(weekKey => {
-        const week = weeklyData[weekKey];
-        return week.sunday || week.saturday || week.monday || week.other;
-      }).filter(Boolean);
 
     } else if (granularity === 'monthly') {
-      // Group by month, taking last day of each month
+      // Filter to last day of each month, plus always include today
       const monthlyData = {};
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString().split('T')[0];
 
       dailyResult.rows.forEach(row => {
         const date = new Date(row.date);
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const dateStr = row.date;
 
-        // Keep the latest date in each month
-        if (!monthlyData[monthKey] || new Date(row.date) > new Date(monthlyData[monthKey].date)) {
+        // Check if this is the last day of its month
+        const nextDay = new Date(date);
+        nextDay.setDate(date.getDate() + 1);
+        const isLastDayOfMonth = nextDay.getDate() === 1;
+
+        if (isLastDayOfMonth) {
+          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
           monthlyData[monthKey] = row;
+        }
+
+        // Always include today
+        if (dateStr === todayStr) {
+          monthlyData['today'] = row;
         }
       });
 
-      finalResult = Object.keys(monthlyData).sort().map(key => monthlyData[key]);
+      finalResult = Object.values(monthlyData).sort((a, b) =>
+        new Date(a.date) - new Date(b.date)
+      );
     }
+    // else: granularity === 'daily', return all days (already done)
 
     res.json(finalResult);
   } catch (error) {
