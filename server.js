@@ -73,7 +73,8 @@ const pool = new Pool({
 app.use(session({
   store: new pgSession({
     pool: pool,
-    tableName: 'session'
+    tableName: 'session',
+    createTableIfMissing: true
   }),
   secret: process.env.SESSION_SECRET || 'session-secret-key-change-this',
   resave: false,
