@@ -549,7 +549,6 @@ app.get('/api/summary', async (req, res) => {
 });
 
 // Get balance history for trend chart
-// Get balance history for trend chart
 app.get('/api/trend_data', async (req, res) => {
   try {
     const granularity = req.query.granularity || 'daily';
@@ -651,51 +650,74 @@ app.get('/api/trend_data', async (req, res) => {
 
     let finalResult = dailyResult.rows;
 
-    // Step 2: Apply granularity aggregation
+    // Helper function to safely parse dates in UTC
+    const parseUTCDate = (dateValue) => {
+      if (dateValue instanceof Date) {
+        return dateValue;
+      }
+      // Handle string dates: '2026-01-31' or '2026-01-31T00:00:00Z'
+      const dateStr = String(dateValue);
+      if (dateStr.includes('T')) {
+        return new Date(dateStr);
+      }
+      return new Date(dateStr + 'T00:00:00Z');
+    };
+
+    // Step 2: Apply granularity aggregation with UTC-aware date handling
     if (granularity === 'weekly') {
       // Filter to Sundays only, plus always include today
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayStr = today.toISOString().split('T')[0];
+      const weeklyData = [];
+      const processedWeeks = new Set();
 
-      finalResult = dailyResult.rows.filter(row => {
-        const rowDate = new Date(row.date);
-        rowDate.setHours(0, 0, 0, 0);
+      dailyResult.rows.forEach(row => {
+        const date = parseUTCDate(row.date);
+        const dayOfWeek = date.getUTCDay(); // 0 = Sunday, use UTC methods
 
-        // Include if it's a Sunday (day 0) OR if it's today
-        return rowDate.getDay() === 0 || row.date === todayStr;
+        // Calculate the Sunday of this week (using UTC)
+        const sunday = new Date(date);
+        sunday.setUTCDate(date.getUTCDate() - dayOfWeek);
+        const weekKey = sunday.toISOString().split('T')[0];
+
+        // If this is a Sunday and we haven't processed this week yet
+        if (dayOfWeek === 0 && !processedWeeks.has(weekKey)) {
+          weeklyData.push(row);
+          processedWeeks.add(weekKey);
+        }
       });
+
+      // Always include the most recent data point (today) if it's not already included
+      const lastDaily = dailyResult.rows[dailyResult.rows.length - 1];
+      const lastWeekly = weeklyData[weeklyData.length - 1];
+
+      if (!lastWeekly || lastDaily.date !== lastWeekly.date) {
+        weeklyData.push(lastDaily);
+      }
+
+      finalResult = weeklyData;
 
     } else if (granularity === 'monthly') {
       // Filter to last day of each month, plus always include today
       const monthlyData = {};
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayStr = today.toISOString().split('T')[0];
 
       dailyResult.rows.forEach(row => {
-        const date = new Date(row.date);
-        const dateStr = row.date;
+        const date = parseUTCDate(row.date);
+        const monthKey = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 
-        // Check if this is the last day of its month
-        const nextDay = new Date(date);
-        nextDay.setDate(date.getDate() + 1);
-        const isLastDayOfMonth = nextDay.getDate() === 1;
-
-        if (isLastDayOfMonth) {
-          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        // Keep the latest date in each month
+        if (!monthlyData[monthKey] || parseUTCDate(row.date) > parseUTCDate(monthlyData[monthKey].date)) {
           monthlyData[monthKey] = row;
-        }
-
-        // Always include today
-        if (dateStr === todayStr) {
-          monthlyData['today'] = row;
         }
       });
 
-      finalResult = Object.values(monthlyData).sort((a, b) =>
-        new Date(a.date) - new Date(b.date)
-      );
+      // Ensure today is included (it will naturally be the last day of the current month)
+      const lastDaily = dailyResult.rows[dailyResult.rows.length - 1];
+      const lastDailyDate = parseUTCDate(lastDaily.date);
+      const currentMonthKey = `${lastDailyDate.getUTCFullYear()}-${String(lastDailyDate.getUTCMonth() + 1).padStart(2, '0')}`;
+
+      // This ensures today is the last entry for the current month
+      monthlyData[currentMonthKey] = lastDaily;
+
+      finalResult = Object.keys(monthlyData).sort().map(key => monthlyData[key]);
     }
     // else: granularity === 'daily', return all days (already done)
 
