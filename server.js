@@ -9,7 +9,12 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const cors = require('cors');
 const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid');
-const { Pool } = require('pg');
+const pg = require('pg');
+const { Pool } = pg;
+
+// Return DATE columns as plain "YYYY-MM-DD" strings instead of Date objects
+// This prevents timezone-dependent date shifting when serialized to JSON
+pg.types.setTypeParser(1082, val => val);
 
 const app = express();
 
@@ -654,45 +659,43 @@ app.get('/api/trend_data', async (req, res) => {
     // Step 2: Apply granularity aggregation
     if (granularity === 'weekly') {
       // Filter to Sundays only, plus always include today
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const todayStr = new Date().toLocaleDateString('en-CA');
 
       finalResult = dailyResult.rows.filter(row => {
-        const rowDate = new Date(row.date);
-        rowDate.setHours(0, 0, 0, 0);
+        const [y, m, d] = row.date.split('-').map(Number);
+        const dayOfWeek = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 
         // Include if it's a Sunday (day 0) OR if it's today
-        return rowDate.getDay() === 0 || rowDate.getTime() === today.getTime();
+        return dayOfWeek === 0 || row.date === todayStr;
       });
 
     } else if (granularity === 'monthly') {
       // Filter to last day of each month, plus always include today
       const monthlyData = {};
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const todayStr = new Date().toLocaleDateString('en-CA');
 
       dailyResult.rows.forEach(row => {
-        const date = new Date(row.date);
-        date.setHours(0, 0, 0, 0);
+        const [y, m, d] = row.date.split('-').map(Number);
+        const date = new Date(Date.UTC(y, m - 1, d));
 
         // Check if this is the last day of its month
         const nextDay = new Date(date);
-        nextDay.setDate(date.getDate() + 1);
-        const isLastDayOfMonth = nextDay.getDate() === 1;
+        nextDay.setUTCDate(date.getUTCDate() + 1);
+        const isLastDayOfMonth = nextDay.getUTCDate() === 1;
 
         if (isLastDayOfMonth) {
-          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+          const monthKey = `${y}-${String(m).padStart(2, '0')}`;
           monthlyData[monthKey] = row;
         }
 
         // Always include today
-        if (date.getTime() === today.getTime()) {
+        if (row.date === todayStr) {
           monthlyData['today'] = row;
         }
       });
 
       finalResult = Object.values(monthlyData).sort((a, b) =>
-        new Date(a.date) - new Date(b.date)
+        a.date.localeCompare(b.date)
       );
     }
     // else: granularity === 'daily', return all days (already done)
@@ -742,8 +745,8 @@ app.get('/api/account_history/:accountId', async (req, res) => {
 
     // Get all months that have snapshots
     snapshots.rows.forEach(row => {
-      const date = new Date(row.date);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const [y, m] = row.date.split('-');
+      const monthKey = `${y}-${m}`;
       allMonths.add(monthKey);
     });
 
@@ -766,11 +769,11 @@ app.get('/api/account_history/:accountId', async (req, res) => {
       // Find last snapshot in this month
       const monthSnapshot = snapshots.rows
         .filter(row => {
-          const d = new Date(row.date);
-          const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-          return mk === monthKey;
+          const [y, m] = row.date.split('-');
+          return `${y}-${m}` === monthKey;
         })
-        .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .pop();
 
       const balance = monthSnapshot ? parseFloat(monthSnapshot.balance) : lastBalance;
 
@@ -796,9 +799,10 @@ app.get('/api/account_history/:accountId', async (req, res) => {
     // Calculate stats for last 3 months
     const threeMonthsAgo = new Date();
     threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    const threeMonthsAgoStr = threeMonthsAgo.toLocaleDateString('en-CA');
 
     const recentSnapshots = snapshots.rows.filter(row =>
-      new Date(row.date) >= threeMonthsAgo
+      row.date >= threeMonthsAgoStr
     );
 
     let stats = null;
