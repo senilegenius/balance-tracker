@@ -656,14 +656,13 @@ app.get('/api/trend_data', async (req, res) => {
       // Filter to Sundays only, plus always include today
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const todayStr = today.toISOString().split('T')[0];
 
       finalResult = dailyResult.rows.filter(row => {
         const rowDate = new Date(row.date);
         rowDate.setHours(0, 0, 0, 0);
 
         // Include if it's a Sunday (day 0) OR if it's today
-        return rowDate.getDay() === 0 || row.date === todayStr;
+        return rowDate.getDay() === 0 || rowDate.getTime() === today.getTime();
       });
 
     } else if (granularity === 'monthly') {
@@ -671,11 +670,10 @@ app.get('/api/trend_data', async (req, res) => {
       const monthlyData = {};
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const todayStr = today.toISOString().split('T')[0];
 
       dailyResult.rows.forEach(row => {
         const date = new Date(row.date);
-        const dateStr = row.date;
+        date.setHours(0, 0, 0, 0);
 
         // Check if this is the last day of its month
         const nextDay = new Date(date);
@@ -688,7 +686,7 @@ app.get('/api/trend_data', async (req, res) => {
         }
 
         // Always include today
-        if (dateStr === todayStr) {
+        if (date.getTime() === today.getTime()) {
           monthlyData['today'] = row;
         }
       });
