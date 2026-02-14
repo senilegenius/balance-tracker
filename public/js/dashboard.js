@@ -269,17 +269,11 @@ async function renderTrendChart(range) {
 
     if (range !== 'all') {
         const days = parseInt(range);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - days);
+        const cutoffStr = cutoffDate.toLocaleDateString('en-CA');
 
-        const cutoffDate = new Date(today);
-        cutoffDate.setDate(today.getDate() - days);
-
-        filteredData = allData.filter(d => {
-            const rowDate = new Date(d.date);
-            rowDate.setHours(0, 0, 0, 0);
-            return rowDate >= cutoffDate;
-        });
+        filteredData = allData.filter(d => d.date >= cutoffStr);
     }
 
     const labels = filteredData.map(d => formatDate(d.date));
@@ -298,25 +292,20 @@ async function renderTrendChart(range) {
         let filteredDailyData = dailyData;
         if (range !== 'all') {
             const days = parseInt(range);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - days);
+            const cutoffStr = cutoffDate.toLocaleDateString('en-CA');
 
-            const cutoffDate = new Date(today);
-            cutoffDate.setDate(today.getDate() - days);
-
-            filteredDailyData = dailyData.filter(d => {
-                const rowDate = new Date(d.date);
-                rowDate.setHours(0, 0, 0, 0);
-                return rowDate >= cutoffDate;
-            });
+            filteredDailyData = dailyData.filter(d => d.date >= cutoffStr);
         }
 
         if (filteredDailyData.length >= 2) {
             // Convert dates to numeric values (days since first date)
-            const firstDate = new Date(filteredDailyData[0].date);
+            const parseUTC = s => { const [y,m,d] = s.split('-').map(Number); return Date.UTC(y, m-1, d); };
+            const firstDateMs = parseUTC(filteredDailyData[0].date);
+            const msPerDay = 1000 * 60 * 60 * 24;
             const xValues = filteredDailyData.map(d => {
-                const daysDiff = (new Date(d.date) - firstDate) / (1000 * 60 * 60 * 24);
-                return daysDiff;
+                return (parseUTC(d.date) - firstDateMs) / msPerDay;
             });
             const yValues = filteredDailyData.map(d => parseFloat(d.liquid_cash_cad));
 
@@ -325,7 +314,7 @@ async function renderTrendChart(range) {
             if (regression) {
                 // Create trend line points matching the chart's x-axis (using aggregated data dates)
                 trendLineData = filteredData.map(d => {
-                    const daysDiff = (new Date(d.date) - firstDate) / (1000 * 60 * 60 * 24);
+                    const daysDiff = (parseUTC(d.date) - firstDateMs) / msPerDay;
                     return regression.slope * daysDiff + regression.intercept;
                 });
             }
@@ -446,11 +435,8 @@ function formatCurrency(value) {
 
 function formatDate(dateString) {
     if (!dateString) return '';
-    const date = new Date(dateString);
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    const year = date.getFullYear().toString().slice(-2);
-    return month + '/' + day + '/' + year;
+    const [year, month, day] = dateString.split('-');
+    return parseInt(month) + '/' + parseInt(day) + '/' + year.slice(-2);
 }
 
 function toggleInstitution(header) {
