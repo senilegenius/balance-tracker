@@ -70,6 +70,30 @@ A personal finance dashboard that aggregates bank account balances using the Pla
 
    The app runs at `http://localhost:3000`.
 
+## Local Development with Docker
+
+Docker Compose runs the app, PostgreSQL, and a Caddy reverse proxy that provides local HTTPS with auto-generated certificates.
+
+1. Start all services:
+
+   ```bash
+   docker compose up
+   ```
+
+2. Trust Caddy's local CA (one-time, macOS only):
+
+   ```bash
+   bash scripts/setup-local-ssl.sh
+   ```
+
+3. Visit `https://localhost` — you should see a green lock. Log in with `demo` / `demo1234` (if using seed data).
+
+4. Tear down:
+
+   ```bash
+   docker compose down -v
+   ```
+
 ## Scripts
 
 | Command | Description |
@@ -81,6 +105,9 @@ A personal finance dashboard that aggregates bank account balances using the Pla
 | `npm run db:add-snapshot` | Add a manual balance snapshot (interactive) |
 | `npm run db:import-csv` | Import balance data from CSV |
 | `npm run db:refresh-rate` | Update USD/CAD exchange rate |
+| `docker compose up` | Run app + Postgres + Caddy (HTTPS) locally |
+| `docker compose down -v` | Tear down local Docker environment |
+| `bash scripts/setup-local-ssl.sh` | Trust Caddy's local CA in macOS Keychain (one-time) |
 
 ## Project Structure
 

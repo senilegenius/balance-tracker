@@ -37,8 +37,8 @@ app.use(helmet({
 }));
 
 // Security: CORS - only allow your domain(s)
-const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? (process.env.ALLOWED_ORIGIN || '').split(',').map(origin => origin.trim()).filter(Boolean)
+const allowedOrigins = process.env.ALLOWED_ORIGIN
+  ? process.env.ALLOWED_ORIGIN.split(',').map(origin => origin.trim()).filter(Boolean)
   : ['http://localhost:3000'];
 
 app.use(cors({

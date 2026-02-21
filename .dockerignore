@@ -1,0 +1,15 @@
+node_modules/
+.env*
+backups/
+.git/
+.claude/
+*.sh
+snapshots-sample.csv
+sql_errors*
+file.txt
+depenedencies.*
+certs/
+Caddyfile
+CLAUDE.md
+Guides/
+db/NOTUSED/
