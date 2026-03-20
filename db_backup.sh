@@ -152,10 +152,12 @@ case "$1" in
         ;;
 
     prd_to_localhost)
-        # echo "${BLUE}═══════════════════════════════════════${NC}"
-        # echo "${BLUE}  Restore Production to Localhost${NC}"
-        # echo "${BLUE}═══════════════════════════════════════${NC}"
         echo "  Restore Production to Localhost"
+
+        # Safety: backup local database before overwriting it
+        echo "  Snapshotting localhost database before restore..."
+        backup_localhost
+        echo ""
 
         # Create production backup
         production_backup=$(backup_production)
@@ -184,5 +186,8 @@ case "$1" in
         exit 1
         ;;
 esac
+
+# Prune backups older than 30 days
+find "$BACKUP_DIR" -name "backup_*.sql" -mtime +30 -delete 2>/dev/null || true
 
 echo "✨ Done!"

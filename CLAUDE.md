@@ -15,6 +15,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `docker compose up` — Run locally with Docker (app + Postgres + Caddy SSL)
 - `docker compose down -v` — Tear down local Docker environment
 - `bash scripts/setup-local-ssl.sh` — One-time: trust Caddy's local CA in macOS Keychain
+- `./db_backup.sh backup_localhost` — Backup local database to `backups/` (uses `.env.local`)
+- `./db_backup.sh backup_prd` — Backup production database to `backups/` (uses `.env.production`)
+- `./db_backup.sh prd_to_localhost` — Snapshot local DB, then pull and restore production data locally
 
 No test framework is configured. No linter or formatter is configured.
 
@@ -24,7 +27,7 @@ Monolithic Node.js (Express 5) app with vanilla JS frontend. Single `server.js` 
 
 **Backend (`server.js`)**
 - All API routes defined inline (no router modules)
-- PostgreSQL via `pg` pool — connection string from `DATABASE_URL` (production) or `DATABASE_URL_LOCAL` (development)
+- PostgreSQL via `pg` pool — always uses `DATABASE_URL`; in Docker this is overridden by `docker-compose.yml`
 - Plaid API integration for fetching bank balances
 - Session auth with `express-session` + `connect-pg-simple` store (25-min rolling idle timeout)
 - Plaid access tokens encrypted in DB using pgcrypto with `DB_ENCRYPTION_KEY`
@@ -48,7 +51,7 @@ Monolithic Node.js (Express 5) app with vanilla JS frontend. Single `server.js` 
 
 ## Environment
 
-Requires `.env` with: `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV`, `DATABASE_URL`, `DATABASE_URL_LOCAL`, `DB_ENCRYPTION_KEY`, `SESSION_SECRET`, `ALLOWED_ORIGIN`, `NODE_ENV`
+Requires `.env` with: `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV`, `DATABASE_URL`, `DB_ENCRYPTION_KEY`, `SESSION_SECRET`, `ALLOWED_ORIGIN`, `NODE_ENV`
 
 **Local dev:** PostgreSQL database named `balance_tracker` on localhost. Server runs on port 3000. Docker setup includes Caddy reverse proxy for local HTTPS (`https://localhost`).
 
@@ -57,7 +60,10 @@ Requires `.env` with: `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV`, `DATABASE_
 
 ## Milestones
 
-**Milestone 0:** A solid dashboard strategy, integration with Plaid, plus a manual account update strategy has been established. App and visualizations work appropriately locally as well as deployed remotely to Render.
+**Milestone 0:** COMPLETED: A solid dashboard strategy, integration with Plaid, plus a manual account update strategy has been established. App and visualizations work appropriately locally as well as deployed remotely to Render.
 
-**Milestone 1:** Establish a more agnostic and resilient deployment pattern. There is desire to easily deploy locally with Docker, and also to any IaaS/PaaS solution (Render, AWS, Azure). Any remote solution could vary over time.
+**Milestone 1:** COMPLETED: Establish a more agnostic and resilient deployment pattern. There is desire to easily deploy locally with Docker, and also to any IaaS/PaaS solution (Render, AWS, Azure). Any remote solution could vary over time.
 
+**Milestone 2:** COMPLETED: Database backup and restore is handled by `db_backup.sh`. Supports backing up localhost or production, and restoring production to localhost (with automatic pre-restore local snapshot). Credentials sourced from env files. Backups auto-pruned after 30 days. Sample data loadable via `npm run db:seed`. RLS enabled on Supabase via `db/enable_rls.sql`.
+
+**Milestone 3:** Deploy to AWS. I don't want to click to set up things in AWS except for in my sandbox where I might want to experiement. For all other environments I want to use Terraform to manage the deployments to AWS. I want to have at least one pre-production environment for my application and also one or more pre-production environments for my IaC.

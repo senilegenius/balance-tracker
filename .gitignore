@@ -1,3 +1,6 @@
+# Claude Code local settings
+.claude/
+
 # OS files
 .DS_Store
 Thumbs.db
@@ -13,6 +16,7 @@ Thumbs.db
 *.log
 npm-debug.log*
 backup_*.sql
+backups/
 
 # Keep config.js out of git (generated during build)
 config.js

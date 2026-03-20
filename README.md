@@ -21,33 +21,38 @@ A personal finance dashboard that aggregates bank account balances using the Pla
 
 ## Prerequisites
 
-- Node.js >= 24
-- PostgreSQL
 - Plaid developer account (for bank connections)
+- **npm/Node workflow:** Node.js >= 24, PostgreSQL
+- **Docker workflow:** Docker Desktop
 
-## Setup
+## Local Development
 
-1. Clone the repo and install dependencies:
+Clone the repo:
+
+```bash
+git clone <repo-url>
+cd my-balance-tracker
+```
+
+Choose your workflow:
+
+---
+
+### Option A: npm/Node
+
+1. Install dependencies:
 
    ```bash
-   git clone <repo-url>
-   cd my-balance-tracker
    npm install
    ```
 
-2. Create a `.env` file with the required variables:
+2. Create a `.env` file from the template:
 
+   ```bash
+   cp .env.example .env
    ```
-   PLAID_CLIENT_ID=
-   PLAID_SECRET=
-   PLAID_ENV=sandbox
-   DATABASE_URL=
-   DATABASE_URL_LOCAL=postgresql://localhost/balance_tracker
-   DB_ENCRYPTION_KEY=
-   SESSION_SECRET=
-   ALLOWED_ORIGIN=http://localhost:3000
-   NODE_ENV=development
-   ```
+
+   Fill in your Plaid credentials, `DB_ENCRYPTION_KEY`, and `SESSION_SECRET`. Keep `DATABASE_URL=postgresql://localhost/balance_tracker` and `ALLOWED_ORIGIN=http://localhost:3000`.
 
 3. Set up the database:
 
@@ -68,46 +73,71 @@ A personal finance dashboard that aggregates bank account balances using the Pla
    npm start
    ```
 
-   The app runs at `http://localhost:3000`.
+   Visit `http://localhost:3000`.
 
-## Local Development with Docker
+---
 
-Docker Compose runs the app, PostgreSQL, and a Caddy reverse proxy that provides local HTTPS with auto-generated certificates.
+### Option B: Docker
 
-1. Start all services:
+Docker Compose runs the app, PostgreSQL, and a Caddy reverse proxy for local HTTPS. The database is initialized automatically with the schema and sample data on first start.
+
+1. Create a `.env.local` file from the template:
 
    ```bash
-   docker compose up
+   cp .env.example .env.local
    ```
 
-2. Trust Caddy's local CA (one-time, macOS only):
+   Fill in your Plaid credentials, `DB_ENCRYPTION_KEY`, and `SESSION_SECRET`. Set:
+   - `DATABASE_URL=postgresql://postgres:postgres@localhost:5433/balance_tracker`
+   - `ALLOWED_ORIGIN=https://localhost`
+
+2. Start all services:
+
+   ```bash
+   docker compose up -d
+   ```
+
+3. Trust Caddy's local CA (macOS only — required after every `docker compose down -v`):
 
    ```bash
    bash scripts/setup-local-ssl.sh
    ```
 
-3. Visit `https://localhost` — you should see a green lock. Log in with `demo` / `demo1234` (if using seed data).
-
-4. Tear down:
+4. Create a user:
 
    ```bash
-   docker compose down -v
+   docker compose exec app npm run create-user
+   ```
+
+5. Visit `https://localhost`. Log in with the user you just created, or use `demo` / `demo1234` (pre-loaded with sample data).
+
+6. To tear down and start fresh:
+
+   ```bash
+   docker compose down -v && docker compose up -d
+   bash scripts/setup-local-ssl.sh
    ```
 
 ## Scripts
 
+For Docker, prefix npm commands with `docker compose exec app` (e.g. `docker compose exec app npm run create-user`).
+
 | Command | Description |
 |---|---|
-| `npm start` | Start the server |
-| `npm run db:setup` | Initialize DB (schema + test data + exchange rates) |
+| `npm start` | Start the server (npm/Node only) |
+| `npm run db:setup` | Initialize DB: schema + test data + exchange rates |
 | `npm run db:reset` | Drop and recreate schema |
+| `npm run db:seed` | Load sample data (demo user + fictional accounts) |
 | `npm run create-user` | Create a new user (interactive) |
 | `npm run db:add-snapshot` | Add a manual balance snapshot (interactive) |
 | `npm run db:import-csv` | Import balance data from CSV |
 | `npm run db:refresh-rate` | Update USD/CAD exchange rate |
-| `docker compose up` | Run app + Postgres + Caddy (HTTPS) locally |
-| `docker compose down -v` | Tear down local Docker environment |
-| `bash scripts/setup-local-ssl.sh` | Trust Caddy's local CA in macOS Keychain (one-time) |
+| `docker compose up -d` | Start app + Postgres + Caddy (Docker only) |
+| `docker compose down -v` | Tear down and delete all Docker volumes |
+| `bash scripts/setup-local-ssl.sh` | Trust Caddy's local CA in macOS Keychain (Docker only) |
+| `./db_backup.sh backup_localhost` | Backup local database to `backups/` |
+| `./db_backup.sh backup_prd` | Backup production database to `backups/` |
+| `./db_backup.sh prd_to_localhost` | Snapshot local DB, then restore production data locally |
 
 ## Project Structure
 
