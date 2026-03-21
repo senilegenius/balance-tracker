@@ -349,16 +349,19 @@ app.get('/api/accounts', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT
-        id,
-        institution_name,
-        account_name,
-        account_type,
-        currency,
-        account_mask,
-        is_liability,
-        is_active
-      FROM accounts
-      ORDER BY institution_name, account_name
+        a.id,
+        a.institution_name,
+        a.account_name,
+        a.account_type,
+        a.currency,
+        a.account_mask,
+        a.is_liability,
+        a.is_active,
+        pi.plaid_item_id,
+        COALESCE(pi.login_required, false) AS login_required
+      FROM accounts a
+      LEFT JOIN plaid_items pi ON a.plaid_item_id = pi.id
+      ORDER BY a.institution_name, a.account_name
     `);
 
     res.json(result.rows);
@@ -862,6 +865,59 @@ app.post('/api/create_link_token', async (req, res) => {
   }
 });
 
+// Create a link token for update mode (re-authenticate an existing item)
+app.post('/api/create_link_token_update', async (req, res) => {
+  const { plaid_item_id } = req.body;
+  if (!plaid_item_id) {
+    return res.status(400).json({ error: 'plaid_item_id is required' });
+  }
+
+  try {
+    const result = await pool.query(
+      'SELECT access_token_encrypted FROM plaid_items WHERE plaid_item_id = $1',
+      [plaid_item_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    const accessToken = await decryptToken(result.rows[0].access_token_encrypted);
+
+    const response = await plaidClient.linkTokenCreate({
+      user: { client_user_id: 'user-1' },
+      client_name: 'Balance Tracker',
+      access_token: accessToken,
+      country_codes: ['US', 'CA'],
+      language: 'en',
+    });
+
+    res.json({ link_token: response.data.link_token });
+  } catch (error) {
+    console.error('Error creating update link token:', error);
+    res.status(500).json({ error: error.message, details: error.response?.data });
+  }
+});
+
+// Clear login_required flag after successful update mode re-authentication
+app.post('/api/clear_item_error', async (req, res) => {
+  const { plaid_item_id } = req.body;
+  if (!plaid_item_id) {
+    return res.status(400).json({ error: 'plaid_item_id is required' });
+  }
+
+  try {
+    await pool.query(
+      'UPDATE plaid_items SET login_required = false WHERE plaid_item_id = $1',
+      [plaid_item_id]
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error clearing item error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Exchange public token for access token and save to database
 app.post('/api/exchange_public_token', async (req, res) => {
   const { public_token } = req.body;
@@ -1063,7 +1119,16 @@ app.post('/api/refresh_balances', async (req, res) => {
           }
         }
       } catch (error) {
-        console.error(`❌ Error refreshing item ${item.plaid_item_id}:`, error.message);
+        const plaidError = error.response?.data?.error_code;
+        if (plaidError === 'ITEM_LOGIN_REQUIRED') {
+          console.error(`🔐 Login required for item ${item.plaid_item_id} — marking for re-authentication`);
+          await pool.query(
+            'UPDATE plaid_items SET login_required = true WHERE plaid_item_id = $1',
+            [item.plaid_item_id]
+          );
+        } else {
+          console.error(`❌ Error refreshing item ${item.plaid_item_id}:`, error.message);
+        }
       }
     }
     }
