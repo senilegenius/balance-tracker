@@ -33,6 +33,7 @@ CREATE TABLE plaid_items (
   institution_name VARCHAR(100) NOT NULL,
   plaid_item_id VARCHAR(100) UNIQUE,
   access_token_encrypted BYTEA,  -- Encrypted access token
+  login_required BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMP DEFAULT NOW()
 );
 
