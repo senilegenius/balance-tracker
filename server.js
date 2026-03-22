@@ -1,6 +1,14 @@
 // server.js with PostgreSQL integration
 require('dotenv').config();
 
+// Fail fast if required environment variables are missing
+const requiredEnvVars = ['DATABASE_URL', 'SESSION_SECRET', 'DB_ENCRYPTION_KEY', 'PLAID_CLIENT_ID', 'PLAID_SECRET'];
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    throw new Error(`Required environment variable missing: ${envVar}`);
+  }
+}
+
 const express = require('express');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
@@ -81,7 +89,7 @@ app.use(session({
     tableName: 'session',
     createTableIfMissing: true
   }),
-  secret: process.env.SESSION_SECRET || 'session-secret-key-change-this',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   rolling: true, // Reset expiration on every request (idle timeout)
@@ -340,7 +348,7 @@ app.get('/api/exchange_rate', async (req, res) => {
 
   } catch (error) {
     console.error('Error getting exchange rate:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to get exchange rate' });
   }
 });
 
@@ -367,7 +375,7 @@ app.get('/api/accounts', async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching accounts:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to fetch accounts' });
   }
 });
 
@@ -397,7 +405,7 @@ app.get('/api/manual_accounts', async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching manual accounts:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to fetch manual accounts' });
   }
 });
 
@@ -433,7 +441,7 @@ app.get('/api/latest_balances', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching latest balances:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to fetch latest balances' });
   }
 });
 
@@ -457,7 +465,7 @@ app.get('/api/historical_balances', async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching historical balances:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to fetch historical balances' });
   }
 });
 
@@ -552,7 +560,7 @@ app.get('/api/summary', async (req, res) => {
     });
   } catch (error) {
     console.error('Error calculating summary:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to calculate summary' });
   }
 });
 
@@ -560,7 +568,8 @@ app.get('/api/summary', async (req, res) => {
 // Get balance history for trend chart
 app.get('/api/trend_data', async (req, res) => {
   try {
-    const granularity = req.query.granularity || 'daily';
+    const validGranularities = ['daily', 'weekly', 'monthly'];
+    const granularity = validGranularities.includes(req.query.granularity) ? req.query.granularity : 'daily';
 
     // Step 1: Generate complete daily series with carried-forward balances
     const dailyResult = await pool.query(`
@@ -706,15 +715,18 @@ app.get('/api/trend_data', async (req, res) => {
     res.json(finalResult);
   } catch (error) {
     console.error('Error fetching trend data:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to fetch trend data' });
   }
 });
 
 // Get account history for individual account view
 app.get('/api/account_history/:accountId', async (req, res) => {
-  try {
-    const accountId = parseInt(req.params.accountId);
+  const accountId = parseInt(req.params.accountId, 10);
+  if (isNaN(accountId) || accountId <= 0) {
+    return res.status(400).json({ error: 'Invalid account ID' });
+  }
 
+  try {
     // Get account info
     const accountInfo = await pool.query(`
       SELECT account_name, currency, account_type
@@ -835,7 +847,7 @@ app.get('/api/account_history/:accountId', async (req, res) => {
 
   } catch (error) {
     console.error('Error fetching account history:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to fetch account history' });
   }
 });
 
@@ -847,7 +859,7 @@ app.get('/api/account_history/:accountId', async (req, res) => {
 app.post('/api/create_link_token', async (req, res) => {
   try {
     const response = await plaidClient.linkTokenCreate({
-      user: { client_user_id: 'user-1' },
+      user: { client_user_id: `user-${req.session.userId}` },
       client_name: 'Balance Tracker',
       // products: ['auth','transactions'],  // AUTH product includes balance access
       products: ['transactions'],
@@ -857,11 +869,7 @@ app.post('/api/create_link_token', async (req, res) => {
     res.json({ link_token: response.data.link_token });
   } catch (error) {
     console.error('Error creating link token:', error);
-    console.error('Full error details:', error.response?.data);
-    res.status(500).json({
-      error: error.message,
-      details: error.response?.data
-    });
+    res.status(500).json({ error: 'Failed to create link token' });
   }
 });
 
@@ -885,7 +893,7 @@ app.post('/api/create_link_token_update', async (req, res) => {
     const accessToken = await decryptToken(result.rows[0].access_token_encrypted);
 
     const response = await plaidClient.linkTokenCreate({
-      user: { client_user_id: 'user-1' },
+      user: { client_user_id: `user-${req.session.userId}` },
       client_name: 'Balance Tracker',
       access_token: accessToken,
       country_codes: ['US', 'CA'],
@@ -895,7 +903,7 @@ app.post('/api/create_link_token_update', async (req, res) => {
     res.json({ link_token: response.data.link_token });
   } catch (error) {
     console.error('Error creating update link token:', error);
-    res.status(500).json({ error: error.message, details: error.response?.data });
+    res.status(500).json({ error: 'Failed to create update link token' });
   }
 });
 
@@ -914,7 +922,7 @@ app.post('/api/clear_item_error', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error clearing item error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to clear item error' });
   }
 });
 
@@ -994,7 +1002,7 @@ app.post('/api/exchange_public_token', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error exchanging token:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to exchange token' });
   }
 });
 
@@ -1188,7 +1196,7 @@ app.post('/api/refresh_balances', async (req, res) => {
     });
   } catch (error) {
     console.error('Error refreshing balances:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to refresh balances' });
   }
 });
 
