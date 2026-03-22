@@ -1,0 +1,13 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored and must never be committed.
+
+# AWS region where the state bucket and lock table will be created
+aws_region = "us-east-1"
+
+# Must be globally unique across all of AWS.
+# Recommended: use your AWS account ID as a suffix to guarantee uniqueness.
+# Find your account ID with: aws sts get-caller-identity --query Account
+state_bucket_name = "tfstate-<your-aws-account-id>"
+
+# DynamoDB table name for state locking (must be unique within your account/region)
+state_lock_table_name = "terraform-state-lock"
