@@ -1,0 +1,52 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy-sandbox:
+    name: Deploy to sandbox
+    runs-on: ubuntu-latest
+    environment: sandbox
+    permissions:
+      id-token: write  # Required for OIDC authentication to AWS
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-west-2
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build --platform linux/amd64 -f Dockerfile.lambda \
+            -t $ECR_REGISTRY/balance-tracker:$IMAGE_TAG \
+            -t $ECR_REGISTRY/balance-tracker:latest \
+            .
+          docker push $ECR_REGISTRY/balance-tracker:$IMAGE_TAG
+          docker push $ECR_REGISTRY/balance-tracker:latest
+
+      - name: Deploy to Lambda
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          aws lambda update-function-code \
+            --function-name balance-tracker-sandbox \
+            --image-uri $ECR_REGISTRY/balance-tracker:$IMAGE_TAG
+          aws lambda wait function-updated \
+            --function-name balance-tracker-sandbox

@@ -1,0 +1,4 @@
+bucket         = "tfstate-<your-pers-account-id>"
+key            = "balance-tracker/prd/terraform.tfstate"
+region         = "us-west-2"
+dynamodb_table = "terraform-state-lock"

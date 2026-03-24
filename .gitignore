@@ -33,3 +33,13 @@ db/load_test_data.sql
 # But allow template and build files
 !config.template.js
 !build.sh
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan
+# terraform.tfvars holds personal/secret values — use terraform.tfvars.example as the template.
+**/terraform.tfvars
+# Backend config files contain AWS account IDs — use *.hcl.example as the template.
+terraform/infra/backends/*.hcl
