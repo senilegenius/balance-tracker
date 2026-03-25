@@ -1204,6 +1204,9 @@ app.post('/api/refresh_balances', async (req, res) => {
 // SERVER START
 // ===========================================
 
+module.exports = app;
+
+if (require.main === module) {
 const PORT = 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
@@ -1221,3 +1224,4 @@ app.listen(PORT, () => {
   console.log('   http://localhost:3000 - Main Dashboard');
   console.log('   http://localhost:3000/connect.html - Connect Banks\n');
 });
+}

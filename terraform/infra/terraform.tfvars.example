@@ -1,0 +1,25 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored and must never be committed.
+#
+# These values are personal/account-specific. Non-sensitive environment config
+# lives in environments/sandbox.tfvars and environments/prd.tfvars.
+
+# IAM role ARN in the target AWS account to assume for resource deployment.
+# For sandbox: the role that allows deploying into your sandbox account.
+# Find in your AWS config or IAM console.
+target_role_arn = "arn:aws:iam::<account-id>:role/<role-name>"
+
+# GitHub repository in owner/repo format (used for OIDC trust policy).
+github_repo = "<github-owner>/<repo-name>"
+
+# CORS origin — the URL the app will be served from.
+# For sandbox: use the API Gateway URL output after first apply, then re-apply.
+# For prd: your custom domain (e.g. https://liquid.example.com).
+allowed_origin = "https://<api-id>.execute-api.us-west-2.amazonaws.com"
+
+# Application secrets — match the values in your .env.production
+database_url      = "postgresql://..."
+plaid_client_id   = ""
+plaid_secret      = ""
+session_secret    = ""
+db_encryption_key = ""
