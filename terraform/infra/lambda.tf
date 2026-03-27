@@ -28,14 +28,15 @@ resource "aws_lambda_function" "app" {
 
   environment {
     variables = {
-      NODE_ENV          = var.node_env
-      PLAID_ENV         = var.plaid_env
-      ALLOWED_ORIGIN    = var.allowed_origin
-      DATABASE_URL      = var.database_url
-      PLAID_CLIENT_ID   = var.plaid_client_id
-      PLAID_SECRET      = var.plaid_secret
-      SESSION_SECRET    = var.session_secret
-      DB_ENCRYPTION_KEY = var.db_encryption_key
+      NODE_ENV             = var.node_env
+      PLAID_ENV            = var.plaid_env
+      ALLOWED_ORIGIN       = var.allowed_origin
+      DATABASE_URL         = var.database_url
+      PLAID_CLIENT_ID      = var.plaid_client_id
+      PLAID_SECRET         = var.plaid_secret
+      SESSION_SECRET       = var.session_secret
+      DB_ENCRYPTION_KEY    = var.db_encryption_key
+      NODE_EXTRA_CA_CERTS  = "/var/task/certs/prod-ca-2021.crt"
     }
   }
 
