@@ -12,5 +12,6 @@ RUN npm ci --omit=dev
 COPY server.js lambda.js ./
 COPY public/ ./public/
 COPY db/ ./db/
+COPY certs/ ./certs/
 
 CMD ["lambda.handler"]

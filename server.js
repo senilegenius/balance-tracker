@@ -9,6 +9,8 @@ for (const envVar of requiredEnvVars) {
   }
 }
 
+const fs = require('fs');
+const path = require('path');
 const express = require('express');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
@@ -78,8 +80,17 @@ if (process.env.NODE_ENV === 'production') {
 app.use(express.json());
 
 // Initialize PostgreSQL connection pool
+// When connecting to Supabase, bundle the CA cert to verify the pooler's SSL chain.
+// Local Docker connects to a local postgres with no SSL — skip the cert there.
+const isSupabase = process.env.DATABASE_URL && process.env.DATABASE_URL.includes('supabase');
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  ...(isSupabase && {
+    ssl: {
+      rejectUnauthorized: true,
+      ca: fs.readFileSync(path.join(__dirname, 'certs', 'prod-ca-2021.crt')).toString(),
+    },
+  }),
 });
 
 // Configure session middleware
