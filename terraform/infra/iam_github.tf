@@ -65,9 +65,12 @@ resource "aws_iam_role_policy" "github_actions" {
         Resource = aws_ecr_repository.app.arn
       },
       {
-        Sid      = "LambdaDeploy"
-        Effect   = "Allow"
-        Action   = "lambda:UpdateFunctionCode"
+        Sid    = "LambdaDeploy"
+        Effect = "Allow"
+        Action = [
+          "lambda:UpdateFunctionCode",
+          "lambda:GetFunctionConfiguration", # Required by `aws lambda wait function-updated`
+        ]
         Resource = aws_lambda_function.app.arn
       },
     ]
