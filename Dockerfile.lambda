@@ -1,0 +1,16 @@
+# Lambda-specific image. Built on the AWS Lambda Node.js base image which
+# includes the Lambda Runtime Interface Client (RIC).
+# For local Docker / App Runner use the existing Dockerfile instead.
+
+FROM public.ecr.aws/lambda/nodejs:20
+
+WORKDIR ${LAMBDA_TASK_ROOT}
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+COPY server.js lambda.js ./
+COPY public/ ./public/
+COPY db/ ./db/
+
+CMD ["lambda.handler"]

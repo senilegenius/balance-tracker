@@ -2,7 +2,9 @@
   "name": "my-balance-tracker",
   "version": "1.0.0",
   "main": "server.js",
-  "engines": {"node": ">=24.0.0"},
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "scripts": {
     "start": "node server.js",
     "db:setup": "psql balance_tracker < db/schema.sql && psql balance_tracker < db/load_test_data.sql && node db/refresh_exchange_rate.js",
@@ -27,6 +29,7 @@
   "license": "ISC",
   "description": "Balance tracker using Plaid API",
   "dependencies": {
+    "@vendia/serverless-express": "^4.12.6",
     "bcrypt": "^6.0.0",
     "connect-pg-simple": "^10.0.0",
     "cors": "^2.8.5",

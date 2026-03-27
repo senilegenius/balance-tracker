@@ -139,10 +139,17 @@ For Docker, prefix npm commands with `docker compose exec app` (e.g. `docker com
 | `./db_backup.sh backup_prd` | Backup production database to `backups/` |
 | `./db_backup.sh prd_to_localhost` | Snapshot local DB, then restore production data locally |
 
+## AWS Deployment
+
+See [`terraform/README.md`](terraform/README.md) for infrastructure setup, Terraform usage, and GitHub Actions configuration.
+
 ## Project Structure
 
 ```
-server.js              # All backend routes and logic
+server.js              # All backend routes and logic (exports app for Lambda)
+lambda.js              # AWS Lambda handler (wraps Express via serverless-express)
+Dockerfile             # Container image for local Docker
+Dockerfile.lambda      # Container image for AWS Lambda
 public/
   index.html           # Main dashboard
   login.html           # Login page
@@ -157,4 +164,7 @@ db/
   refresh_exchange_rate.js  # FX rate updater
   import_csv.js        # CSV import tool
   add_manual_snapshot.js    # Manual snapshot entry
+terraform/             # Infrastructure as code — see terraform/README.md
+.github/workflows/
+  deploy.yml           # Build + push Lambda image, deploy on push to main
 ```
