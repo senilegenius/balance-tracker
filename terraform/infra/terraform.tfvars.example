@@ -9,13 +9,10 @@
 # Find in your AWS config or IAM console.
 target_role_arn = "arn:aws:iam::<account-id>:role/<role-name>"
 
-# GitHub repository in owner/repo format (used for OIDC trust policy).
-github_repo = "<github-owner>/<repo-name>"
-
-# CORS origin — the URL the app will be served from.
-# For sandbox: use the API Gateway URL output after first apply, then re-apply.
-# For prd: your custom domain (e.g. https://liquid.example.com).
-allowed_origin = "https://<api-id>.execute-api.us-west-2.amazonaws.com"
+# CORS origin — only set this when using a custom domain (e.g. prd with Route 53).
+# When omitted, Terraform automatically uses the API Gateway URL. Safe to leave
+# unset for sandbox.
+# allowed_origin = "https://yourdomain.com"
 
 # Application secrets — match the values in your .env.production
 database_url      = "postgresql://..."
