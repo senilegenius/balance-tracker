@@ -1,3 +1,7 @@
+locals {
+  allowed_origin = var.allowed_origin != null ? var.allowed_origin : "https://${aws_apigatewayv2_api.app.id}.execute-api.${var.aws_region}.amazonaws.com"
+}
+
 resource "aws_iam_role" "lambda" {
   name = "${var.app_name}-${var.environment}-lambda"
 
@@ -21,7 +25,7 @@ resource "aws_lambda_function" "app" {
   role          = aws_iam_role.lambda.arn
   package_type  = "Image"
 
-  image_uri = "${aws_ecr_repository.app.repository_url}:latest"
+  image_uri = "${data.aws_ecr_repository.app.repository_url}:latest"
 
   timeout     = 30
   memory_size = 512
@@ -30,7 +34,7 @@ resource "aws_lambda_function" "app" {
     variables = {
       NODE_ENV             = var.node_env
       PLAID_ENV            = var.plaid_env
-      ALLOWED_ORIGIN       = var.allowed_origin
+      ALLOWED_ORIGIN       = local.allowed_origin
       DATABASE_URL         = var.database_url
       PLAID_CLIENT_ID      = var.plaid_client_id
       PLAID_SECRET         = var.plaid_secret

@@ -5,7 +5,7 @@ output "api_gateway_url" {
 
 output "ecr_repository_url" {
   description = "ECR repository URL for pushing container images"
-  value       = aws_ecr_repository.app.repository_url
+  value       = data.aws_ecr_repository.app.repository_url
 }
 
 output "lambda_function_name" {
@@ -13,7 +13,3 @@ output "lambda_function_name" {
   value       = aws_lambda_function.app.function_name
 }
 
-output "github_actions_role_arn" {
-  description = "IAM role ARN for GitHub Actions to assume via OIDC"
-  value       = aws_iam_role.github_actions.arn
-}

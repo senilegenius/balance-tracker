@@ -23,13 +23,6 @@ variable "app_name" {
   default     = "balance-tracker"
 }
 
-# ── GitHub ───────────────────────────────────────────────────────────────────
-
-variable "github_repo" {
-  description = "GitHub repository in owner/repo format, used for OIDC trust policy"
-  type        = string
-}
-
 # ── Application config ────────────────────────────────────────────────────────
 
 variable "plaid_env" {
@@ -44,8 +37,9 @@ variable "node_env" {
 }
 
 variable "allowed_origin" {
-  description = "ALLOWED_ORIGIN for CORS — the URL the app is served from"
+  description = "ALLOWED_ORIGIN for CORS — the URL the app is served from. Defaults to the API Gateway URL when not set."
   type        = string
+  default     = null
 }
 
 variable "refresh_schedule" {
