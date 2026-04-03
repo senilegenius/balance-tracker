@@ -39,7 +39,7 @@ db/load_test_data.sql
 *.tfstate
 *.tfstate.backup
 *.tfplan
-# terraform.tfvars holds personal/secret values — use terraform.tfvars.example as the template.
-**/terraform.tfvars
-# Backend config files contain AWS account IDs — use *.hcl.example as the template.
+# Environment files hold config + secrets — use *.tfvars.example as the template.
+terraform/infra/environments/*.tfvars
+# Backend config files contain account IDs — use *.hcl.example as the template.
 terraform/infra/backends/*.hcl

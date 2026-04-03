@@ -1,5 +1,0 @@
-environment      = "sandbox"
-aws_region       = "us-west-2"
-plaid_env        = "sandbox"
-node_env         = "development"
-refresh_schedule = "cron(0 12,18,0 * * ? *)"

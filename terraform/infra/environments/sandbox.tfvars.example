@@ -1,0 +1,26 @@
+# Copy to sandbox.tfvars and fill in real values.
+# sandbox.tfvars is gitignored — never commit it.
+
+# ── Deployment target ─────────────────────────────────────────────────────────
+
+environment     = "sandbox"
+aws_region      = "us-west-2"
+target_role_arn = "arn:aws:iam::<sandbox-account-id>:role/<role-name>"
+
+# ── Application config ────────────────────────────────────────────────────────
+
+plaid_env        = "sandbox"
+node_env         = "development"
+refresh_schedule = "cron(0 12,18,0 * * ? *)"
+
+# CORS origin — leave commented out for sandbox; Terraform uses the API Gateway
+# URL automatically.
+# allowed_origin = "https://yourdomain.com"
+
+# ── Secrets ───────────────────────────────────────────────────────────────────
+
+database_url      = "postgresql://..."
+plaid_client_id   = ""
+plaid_secret      = ""
+session_secret    = ""
+db_encryption_key = ""
