@@ -1,0 +1,25 @@
+# Copy to prd.tfvars and fill in real values.
+# prd.tfvars is gitignored — never commit it.
+
+# ── Deployment target ─────────────────────────────────────────────────────────
+
+environment     = "prd"
+aws_region      = "us-west-2"
+target_role_arn = "arn:aws:iam::<prd-account-id>:role/<role-name>"
+
+# ── Application config ────────────────────────────────────────────────────────
+
+plaid_env        = "production"
+node_env         = "production"
+refresh_schedule = "cron(0 12,18,0 * * ? *)"
+
+# CORS origin — set this to your custom domain once DNS is pointed at AWS.
+# allowed_origin = "https://liquid.example.com"
+
+# ── Secrets ───────────────────────────────────────────────────────────────────
+
+database_url      = "postgresql://..."
+plaid_client_id   = ""
+plaid_secret      = ""
+session_secret    = ""
+db_encryption_key = ""
