@@ -13,3 +13,8 @@ output "lambda_function_name" {
   value       = aws_lambda_function.app.function_name
 }
 
+output "app_url" {
+  description = "App URL — custom domain if configured, otherwise API Gateway URL"
+  value       = var.custom_domain != null ? "https://${var.custom_domain}" : aws_apigatewayv2_stage.default.invoke_url
+}
+

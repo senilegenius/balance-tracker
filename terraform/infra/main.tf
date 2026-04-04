@@ -36,4 +36,12 @@ provider "aws" {
   }
 }
 
+# DNS provider — targets the management account directly (no assume_role).
+# Used for Route53 records when a custom domain is configured.
+# The management account holds the Route53 hosted zone.
+provider "aws" {
+  alias  = "dns"
+  region = var.aws_region
+}
+
 data "aws_caller_identity" "current" {}

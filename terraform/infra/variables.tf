@@ -79,3 +79,17 @@ variable "db_encryption_key" {
   type        = string
   sensitive   = true
 }
+
+# ── Custom domain (optional) ──────────────────────────────────────────────────
+
+variable "custom_domain" {
+  description = "Custom domain for the app (e.g. yourdomain.com). When set, creates an ACM cert, API Gateway custom domain, and Route53 DNS record."
+  type        = string
+  default     = null
+}
+
+variable "route53_zone_id" {
+  description = "Route53 hosted zone ID for the custom domain. Required when custom_domain is set."
+  type        = string
+  default     = null
+}

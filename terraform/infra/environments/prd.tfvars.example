@@ -14,7 +14,13 @@ node_env         = "production"
 refresh_schedule = "cron(0 12,18,0 * * ? *)"
 
 # CORS origin — set this to your custom domain once DNS is pointed at AWS.
-# allowed_origin = "https://liquid.example.com"
+# allowed_origin = "https://<your-domain>"
+
+# ── Custom domain (optional) ──────────────────────────────────────────────────
+# Uncomment to enable ACM cert + API Gateway custom domain + Route53 DNS record.
+# Route53 zone must be in the management account.
+# custom_domain   = "<your-domain>"
+# route53_zone_id = "<route53-hosted-zone-id>"
 
 # ── Secrets ───────────────────────────────────────────────────────────────────
 
