@@ -15,7 +15,12 @@ refresh_schedule = "cron(0 12,18,0 * * ? *)"
 
 # CORS origin — leave commented out for sandbox; Terraform uses the API Gateway
 # URL automatically.
-# allowed_origin = "https://yourdomain.com"
+# allowed_origin = "https://<your-domain>"
+
+# ── Custom domain (optional) ──────────────────────────────────────────────────
+# Typically left unset for sandbox. Uncomment to enable.
+# custom_domain   = "<your-domain>"
+# route53_zone_id = "<route53-hosted-zone-id>"
 
 # ── Secrets ───────────────────────────────────────────────────────────────────
 
