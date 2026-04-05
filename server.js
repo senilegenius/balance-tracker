@@ -1006,11 +1006,10 @@ app.post('/api/exchange_public_token', async (req, res) => {
   }
 });
 
-// Refresh balances from Plaid and save to database
-app.post('/api/refresh_balances', async (req, res) => {
-  try {
-    const { manualBalances } = req.body || {};
-
+// Refresh balances from Plaid and save to database.
+// Called directly by the EventBridge scheduler (via lambda.js) and by the
+// HTTP route below. Returns a result object; throws on error.
+async function refreshBalances({ manualBalances = {}, date = null } = {}) {
     // Get current exchange rate (with auto-refresh if stale)
     const exchangeRateResult = await pool.query(`
       SELECT rate, updated_at FROM exchange_rates
@@ -1052,7 +1051,7 @@ app.post('/api/refresh_balances', async (req, res) => {
     }
 
     // Use provided date or default to server's local timezone
-    const today = req.body?.date || new Date().toLocaleDateString('en-CA');
+    const today = date || new Date().toLocaleDateString('en-CA');
     console.log(`Using date: ${today}`);
 
     let accountsUpdated = 0;
@@ -1186,14 +1185,24 @@ app.post('/api/refresh_balances', async (req, res) => {
     const totalUpdated = accountsUpdated + manualAccountsUpdated;
     console.log(`\n✅ Refresh complete: ${totalUpdated} accounts updated (${accountsUpdated} Plaid, ${manualAccountsUpdated} manual)\n`);
 
-    res.json({
+    return {
       success: true,
       accountsUpdated: totalUpdated,
       plaidAccountsUpdated: accountsUpdated,
       manualAccountsUpdated: manualAccountsUpdated,
       date: today,
       exchangeRate: currentRate
+    };
+}
+
+// Refresh balances from Plaid and save to database
+app.post('/api/refresh_balances', async (req, res) => {
+  try {
+    const result = await refreshBalances({
+      manualBalances: req.body?.manualBalances,
+      date: req.body?.date,
     });
+    res.json(result);
   } catch (error) {
     console.error('Error refreshing balances:', error);
     res.status(500).json({ error: 'Failed to refresh balances' });
@@ -1204,7 +1213,7 @@ app.post('/api/refresh_balances', async (req, res) => {
 // SERVER START
 // ===========================================
 
-module.exports = app;
+module.exports = { app, refreshBalances };
 
 if (require.main === module) {
 const PORT = 3000;
