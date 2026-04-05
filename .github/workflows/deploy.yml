@@ -89,8 +89,6 @@ jobs:
           docker push $ECR_REGISTRY/balance-tracker:latest
 
       - name: Deploy to Lambda
-        # TODO: remove continue-on-error after first successful terraform apply in prd
-        continue-on-error: true
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.ref_name }}

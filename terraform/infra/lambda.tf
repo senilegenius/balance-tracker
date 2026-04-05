@@ -27,7 +27,7 @@ resource "aws_lambda_function" "app" {
 
   image_uri = "${data.aws_ecr_repository.app.repository_url}:latest"
 
-  timeout     = 30
+  timeout     = 300
   memory_size = 512
 
   environment {
