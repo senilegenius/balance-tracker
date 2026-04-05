@@ -39,7 +39,7 @@
     "express-rate-limit": "^8.2.1",
     "express-session": "^1.19.0",
     "helmet": "^8.1.0",
-    "pg": "^8.16.3",
+    "pg": "^8.20.0",
     "plaid": "^41.4.0"
   }
 }
