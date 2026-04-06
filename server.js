@@ -1068,7 +1068,8 @@ async function refreshBalances({ manualBalances = {}, date = null } = {}) {
 
       console.log(`\n🔄 Refreshing balances for ${itemsResult.rows.length} Plaid items...`);
 
-    for (const item of itemsResult.rows) {
+    const itemCounts = await Promise.all(itemsResult.rows.map(async (item) => {
+      let count = 0;
       try {
         console.log(`\n📍 Processing item: ${item.plaid_item_id}`);
 
@@ -1117,7 +1118,7 @@ async function refreshBalances({ manualBalances = {}, date = null } = {}) {
 
             if (balanceToSave !== null) {
               console.log(`     ✅ Updated DB account ${accountId} (${accountName}): ${balanceToSave}`);
-              accountsUpdated++;
+              count++;
             } else {
               console.log(`     ⚠️  Saved with NULL balance (not available from bank)`);
             }
@@ -1137,7 +1138,9 @@ async function refreshBalances({ manualBalances = {}, date = null } = {}) {
           console.error(`❌ Error refreshing item ${item.plaid_item_id}:`, error.message);
         }
       }
-    }
+      return count;
+    }));
+    accountsUpdated = itemCounts.reduce((sum, n) => sum + n, 0);
     }
 
     // Process manual accounts if provided
