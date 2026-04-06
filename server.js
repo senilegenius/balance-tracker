@@ -120,7 +120,7 @@ pool.query('SELECT NOW()', (err, res) => {
 
 // Initialize Plaid client
 const configuration = new Configuration({
-  basePath: PlaidEnvironments.production,
+  basePath: PlaidEnvironments[process.env.PLAID_ENV] || PlaidEnvironments.production,
   baseOptions: {
     headers: {
       'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID,
