@@ -2,6 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git workflow
+
+**Never commit directly to `main`.** Always create a feature branch, commit there, push the branch, and open a PR. This applies to every change, no matter how small.
+
+```sh
+git checkout -b <branch-name>
+# make changes, commit
+git push -u origin <branch-name>
+gh pr create ...
+```
+
 ## Commands
 
 - `npm start` — Run the server (Express on port 3000)
