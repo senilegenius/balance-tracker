@@ -31,7 +31,7 @@ Clone the repo:
 
 ```bash
 git clone <repo-url>
-cd my-balance-tracker
+cd balance-tracker
 ```
 
 Choose your workflow:
