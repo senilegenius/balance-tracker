@@ -11,7 +11,7 @@ if [ "$(uname)" != "Darwin" ]; then
     exit 1
 fi
 
-CONTAINER_NAME="my-balance-tracker-caddy-1"
+CONTAINER_NAME="balance-tracker-caddy-1"
 CERT_PATH="/data/caddy/pki/authorities/local/root.crt"
 LOCAL_CERT="caddy-root-ca.crt"
 CERT_CN="Caddy Local Authority"
