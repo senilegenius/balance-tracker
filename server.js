@@ -361,10 +361,12 @@ app.get('/api/accounts', async (req, res) => {
         a.institution_name,
         a.account_name,
         a.account_type,
+        a.account_category,
         a.currency,
         a.account_mask,
         a.is_liability,
         a.is_active,
+        (a.plaid_account_id IS NOT NULL) AS is_plaid_connected,
         pi.plaid_item_id,
         COALESCE(pi.login_required, false) AS login_required
       FROM accounts a
@@ -426,6 +428,7 @@ app.get('/api/latest_balances', async (req, res) => {
       FROM accounts a
       LEFT JOIN balance_snapshots b ON a.id = b.account_id
       WHERE a.is_active = true
+        AND a.account_category = 'liquid'
         AND b.balance IS NOT NULL
         AND b.date = (
           SELECT MAX(date)
@@ -484,6 +487,7 @@ app.get('/api/summary', async (req, res) => {
       FROM balance_snapshots b
       JOIN accounts a ON b.account_id = a.id
       WHERE a.is_active = true
+        AND a.account_category = 'liquid'
         AND b.date = (
           SELECT MAX(date)
           FROM balance_snapshots
@@ -491,11 +495,13 @@ app.get('/api/summary', async (req, res) => {
         )
     `);
 
-    // Get the previous snapshot date for comparison (second most recent across all accounts)
+    // Get the previous snapshot date for comparison (second most recent across liquid accounts)
     const previousDateResult = await pool.query(`
-      SELECT DISTINCT date
-      FROM balance_snapshots
-      ORDER BY date DESC
+      SELECT DISTINCT b.date
+      FROM balance_snapshots b
+      JOIN accounts a ON b.account_id = a.id
+      WHERE a.is_active = true AND a.account_category = 'liquid'
+      ORDER BY b.date DESC
       LIMIT 1 OFFSET 1
     `);
 
@@ -518,6 +524,7 @@ app.get('/api/summary', async (req, res) => {
         FROM balance_snapshots b
         JOIN accounts a ON b.account_id = a.id
         WHERE a.is_active = true
+          AND a.account_category = 'liquid'
           AND b.date = $1
       `, [previousDate]);
 
@@ -614,6 +621,7 @@ app.get('/api/trend_data', async (req, res) => {
         FROM all_calendar_days d
         CROSS JOIN accounts a
         WHERE a.is_active = true
+          AND a.account_category = 'liquid'
       ),
 
       -- Aggregate to daily totals (sum across all accounts)
@@ -852,6 +860,212 @@ app.get('/api/account_history/:accountId', async (req, res) => {
 });
 
 // ===========================================
+// RETIREMENT ENDPOINTS
+// ===========================================
+
+// Get latest balances for all active retirement accounts
+app.get('/api/retirement_balances', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        a.id,
+        a.institution_name,
+        a.account_name,
+        a.account_type,
+        a.currency,
+        a.account_mask,
+        b.balance,
+        b.date,
+        er.rate AS usd_to_cad_rate
+      FROM accounts a
+      LEFT JOIN balance_snapshots b
+        ON a.id = b.account_id
+        AND b.date = (SELECT MAX(date) FROM balance_snapshots WHERE account_id = a.id)
+      LEFT JOIN exchange_rates er
+        ON er.from_currency = 'USD' AND er.to_currency = 'CAD'
+      WHERE a.is_active = true
+        AND a.account_category = 'retirement'
+        AND b.balance IS NOT NULL
+      ORDER BY a.institution_name, a.account_name
+    `);
+
+    res.json({
+      accounts: result.rows,
+      date: result.rows.length > 0 ? result.rows[0].date : null
+    });
+  } catch (error) {
+    console.error('Error fetching retirement balances:', error);
+    res.status(500).json({ error: 'Failed to fetch retirement balances' });
+  }
+});
+
+// Get summary totals for retirement accounts, grouped by account type, in CAD
+app.get('/api/retirement_summary', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        a.account_type,
+        SUM(
+          CASE
+            WHEN a.currency = 'CAD' THEN b.balance
+            WHEN a.currency = 'USD' THEN b.balance * er.rate
+            ELSE b.balance
+          END
+        ) AS total_cad,
+        COUNT(a.id) AS account_count
+      FROM accounts a
+      JOIN balance_snapshots b
+        ON b.account_id = a.id
+        AND b.date = (SELECT MAX(date) FROM balance_snapshots WHERE account_id = a.id)
+      LEFT JOIN exchange_rates er
+        ON er.from_currency = 'USD' AND er.to_currency = 'CAD'
+      WHERE a.is_active = true
+        AND a.account_category = 'retirement'
+      GROUP BY a.account_type
+      HAVING SUM(
+        CASE
+          WHEN a.currency = 'CAD' THEN b.balance
+          WHEN a.currency = 'USD' THEN b.balance * er.rate
+          ELSE b.balance
+        END
+      ) <> 0
+      ORDER BY a.account_type
+    `);
+
+    // Fetch exchange rate and latest date for the response envelope
+    const metaResult = await pool.query(`
+      SELECT er.rate AS usd_to_cad_rate, MAX(b.date) AS latest_date
+      FROM exchange_rates er
+      CROSS JOIN balance_snapshots b
+      JOIN accounts a ON b.account_id = a.id
+      WHERE er.from_currency = 'USD' AND er.to_currency = 'CAD'
+        AND a.is_active = true
+        AND a.account_category = 'retirement'
+      GROUP BY er.rate
+    `);
+
+    const rate = metaResult.rows.length > 0 ? parseFloat(metaResult.rows[0].usd_to_cad_rate) : null;
+    const date = metaResult.rows.length > 0 ? metaResult.rows[0].latest_date : null;
+
+    const byType = result.rows.map(row => ({
+      accountType: row.account_type,
+      totalCad: parseFloat(row.total_cad),
+      accountCount: parseInt(row.account_count, 10)
+    }));
+
+    const totalRetirementCad = byType.reduce((sum, t) => sum + t.totalCad, 0);
+
+    res.json({
+      date,
+      usdToCadRate: rate,
+      totalRetirementCad,
+      byType
+    });
+  } catch (error) {
+    console.error('Error fetching retirement summary:', error);
+    res.status(500).json({ error: 'Failed to fetch retirement summary' });
+  }
+});
+
+// Get balance history for retirement trend chart
+app.get('/api/retirement_trend_data', async (req, res) => {
+  try {
+    const validGranularities = ['daily', 'weekly', 'monthly'];
+    const granularity = validGranularities.includes(req.query.granularity) ? req.query.granularity : 'daily';
+
+    // Generate a complete daily series with carry-forward for each retirement account,
+    // then sum to a single CAD total per day (USD converted via stored rate).
+    const dailyResult = await pool.query(`
+      WITH
+      date_range AS (
+        SELECT
+          MIN(b.date) AS first_date,
+          CURRENT_DATE AS last_date
+        FROM balance_snapshots b
+        JOIN accounts a ON b.account_id = a.id
+        WHERE a.is_active = true AND a.account_category = 'retirement'
+      ),
+      all_calendar_days AS (
+        SELECT date::date AS date
+        FROM date_range,
+             generate_series(first_date, last_date, '1 day'::interval) AS date
+      ),
+      daily_account_balances AS (
+        SELECT
+          d.date,
+          a.id AS account_id,
+          a.currency,
+          (
+            SELECT b.balance
+            FROM balance_snapshots b
+            WHERE b.account_id = a.id AND b.date <= d.date
+            ORDER BY b.date DESC
+            LIMIT 1
+          ) AS balance,
+          (
+            SELECT b.usd_to_cad_rate
+            FROM balance_snapshots b
+            WHERE b.account_id = a.id AND b.date <= d.date
+            ORDER BY b.date DESC
+            LIMIT 1
+          ) AS rate
+        FROM all_calendar_days d
+        CROSS JOIN accounts a
+        WHERE a.is_active = true AND a.account_category = 'retirement'
+      ),
+      daily_totals AS (
+        SELECT
+          date,
+          SUM(
+            CASE
+              WHEN balance IS NOT NULL AND currency = 'CAD' THEN balance
+              WHEN balance IS NOT NULL AND currency = 'USD' THEN balance * COALESCE(rate, 1)
+              ELSE 0
+            END
+          ) AS total_retirement_cad
+        FROM daily_account_balances
+        GROUP BY date
+      )
+      SELECT date, total_retirement_cad
+      FROM daily_totals
+      ORDER BY date
+    `);
+
+    let finalResult = dailyResult.rows;
+
+    if (granularity === 'weekly') {
+      const todayStr = new Date().toLocaleDateString('en-CA');
+      finalResult = dailyResult.rows.filter(row => {
+        const [y, m, d] = row.date.split('-').map(Number);
+        const dayOfWeek = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+        return dayOfWeek === 0 || row.date === todayStr;
+      });
+    } else if (granularity === 'monthly') {
+      const monthlyData = {};
+      const todayStr = new Date().toLocaleDateString('en-CA');
+      dailyResult.rows.forEach(row => {
+        const [y, m, d] = row.date.split('-').map(Number);
+        const date = new Date(Date.UTC(y, m - 1, d));
+        const nextDay = new Date(date);
+        nextDay.setUTCDate(date.getUTCDate() + 1);
+        if (nextDay.getUTCDate() === 1) {
+          monthlyData[`${y}-${String(m).padStart(2, '0')}`] = row;
+        }
+        if (row.date === todayStr) {
+          monthlyData['today'] = row;
+        }
+      });
+      finalResult = Object.values(monthlyData).sort((a, b) => a.date.localeCompare(b.date));
+    }
+
+    res.json(finalResult);
+  } catch (error) {
+    console.error('Error fetching retirement trend data:', error);
+    res.status(500).json({ error: 'Failed to fetch retirement trend data' });
+  }
+});
+
+// ===========================================
 // PLAID API ENDPOINTS
 // ===========================================
 
@@ -968,25 +1182,39 @@ app.post('/api/exchange_public_token', async (req, res) => {
       access_token: accessToken,
     });
 
+    // Plaid subtypes that should be classified as retirement accounts
+    const RETIREMENT_SUBTYPES = new Set([
+      '401k', '401a', '403b', '457b', '457',
+      'ira', 'roth', 'roth 401k',
+      'pension', 'retirement',
+      'rrsp', 'tfsa', 'lira', 'rrif', 'resp',
+    ]);
+
     for (const account of accountsResponse.data.accounts) {
       const accountType = account.type;
       const subtype = account.subtype;
+      const subtypeLower = subtype?.toLowerCase() || '';
 
       // Auto-detect liabilities based on account type
       const liabilityTypes = ['mortgage', 'loan', 'line of credit', 'credit line'];
-      const isLiability = liabilityTypes.includes(subtype?.toLowerCase()) ||
+      const isLiability = liabilityTypes.includes(subtypeLower) ||
                           liabilityTypes.includes(accountType?.toLowerCase());
+
+      // Auto-classify retirement accounts from Plaid subtype
+      const accountCategory = RETIREMENT_SUBTYPES.has(subtypeLower) ? 'retirement' : 'liquid';
 
       await pool.query(`
         INSERT INTO accounts (
           plaid_item_id, institution_name, account_name, account_type,
-          currency, account_mask, plaid_account_id, is_liability
+          currency, account_mask, plaid_account_id, is_liability, account_category
         )
         SELECT
-          pi.id, $1, $2, $3, $4, $5, $6, $7
+          pi.id, $1, $2, $3, $4, $5, $6, $7, $8
         FROM plaid_items pi
-        WHERE pi.plaid_item_id = $8
-        ON CONFLICT (plaid_account_id) DO NOTHING
+        WHERE pi.plaid_item_id = $9
+        ON CONFLICT (plaid_account_id) DO UPDATE SET
+          account_category = EXCLUDED.account_category,
+          is_liability = EXCLUDED.is_liability
       `, [
         institutionName,
         account.name,
@@ -995,6 +1223,7 @@ app.post('/api/exchange_public_token', async (req, res) => {
         account.mask,
         account.account_id,
         isLiability,
+        accountCategory,
         itemId
       ]);
     }

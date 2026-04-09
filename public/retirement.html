@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retirement Accounts</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            overflow-x: hidden;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 2rem;
+        }
+
+        /* ── Page tabs (shared with index.html) ─────────────────────────── */
+        .page-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 30px;
+        }
+
+        .tab-link {
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            color: #7f8c8d;
+            background: white;
+            border: 1px solid #e0e0e0;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        }
+
+        .tab-link:hover {
+            background: #f0f0f0;
+            color: #2c3e50;
+        }
+
+        .tab-link.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
+
+        /* ── Summary cards ──────────────────────────────────────────────── */
+        .summary-panel {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .card.primary {
+            grid-column: span 4;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .card-label {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-bottom: 8px;
+        }
+
+        .card-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        /* Per-type cards use a smaller value font */
+        .card:not(.primary) .card-value,
+        .type-positive {
+            font-size: 1.8rem !important;
+            font-weight: bold;
+            color: #27ae60;
+            margin-bottom: 8px;
+        }
+
+        .card-sub {
+            font-size: 0.85rem;
+            opacity: 0.75;
+        }
+
+        .card:not(.primary) .card-sub {
+            color: #7f8c8d;
+            opacity: 1;
+        }
+
+        /* ── Balances panel ─────────────────────────────────────────────── */
+        .balances-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-bottom: 30px;
+        }
+
+        .balances-panel h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+
+        .balances-panel h2 span {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+            font-weight: normal;
+        }
+
+        /* ── Institution sections ───────────────────────────────────────── */
+        .institution {
+            margin-bottom: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .institution-header {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            color: #2c3e50;
+            user-select: none;
+        }
+
+        .institution-header:hover {
+            background: #e9ecef;
+        }
+
+        .institution-accounts {
+            padding: 10px;
+        }
+
+        .institution-accounts.collapsed {
+            display: none;
+        }
+
+        .chevron {
+            transition: transform 0.3s;
+        }
+
+        .chevron.open {
+            transform: rotate(180deg);
+        }
+
+        /* ── Account rows ───────────────────────────────────────────────── */
+        .account-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 100px;
+            padding: 12px 20px;
+            align-items: center;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .account-row:last-child {
+            border-bottom: none;
+        }
+
+        .account-name {
+            color: #2c3e50;
+            font-weight: 500;
+        }
+
+        .account-type {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+
+        /* Native USD amount shown alongside the CAD balance */
+        .account-usd-note {
+            text-align: right;
+        }
+
+        .currency-note {
+            font-size: 0.8rem;
+            color: #95a5a6;
+        }
+
+        .account-balance {
+            text-align: right;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .account-balance.positive { color: #27ae60; }
+        .account-balance.negative { color: #e74c3c; }
+
+        /* ── Type tag badges ────────────────────────────────────────────── */
+        .account-tag {
+            text-align: right;
+        }
+
+        .tag {
+            display: inline-block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 4px;
+            background: #f0f0f0;
+            color: #7f8c8d;
+        }
+
+        .tag-401k    { background: #eafaf1; color: #1e8449; }
+        .tag-ira     { background: #eaf4fb; color: #2471a3; }
+        .tag-rrsp    { background: #fdf2f8; color: #9b59b6; }
+        .tag-tfsa    { background: #fef9e7; color: #d68910; }
+        .tag-lira    { background: #fdedec; color: #cb4335; }
+        .tag-pension { background: #f4f6f7; color: #566573; }
+        .tag-other   { background: #f0f0f0; color: #7f8c8d; }
+
+        /* ── Trend chart panel ──────────────────────────────────────────── */
+        .chart-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-bottom: 30px;
+        }
+
+        .chart-panel h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+
+        .date-range-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .date-range-btn {
+            padding: 8px 16px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .date-range-btn:hover { background: #f8f9fa; }
+
+        .date-range-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            width: 100%;
+        }
+
+        /* ── Responsive ─────────────────────────────────────────────────── */
+        @media (max-width: 1200px) {
+            .summary-panel {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .card.primary {
+                grid-column: span 2;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .summary-panel {
+                grid-template-columns: 1fr;
+            }
+            .card.primary {
+                grid-column: span 1;
+            }
+            .account-row {
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+            .account-usd-note {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏦 Retirement Accounts</h1>
+
+        <div class="page-tabs">
+            <a href="/index.html" class="tab-link">💵 Liquid Cash</a>
+            <a href="/retirement.html" class="tab-link active">🏦 Retirement</a>
+        </div>
+
+        <!-- Summary cards — populated dynamically by retirement.js -->
+        <div class="summary-panel" id="summaryPanel">
+            <div class="card primary">
+                <div class="card-label">Total Retirement (CAD)</div>
+                <div class="card-value">Loading…</div>
+            </div>
+        </div>
+
+        <!-- Account balances — institutions + rows populated by retirement.js -->
+        <div class="balances-panel">
+            <h2>Retirement Account Balances <span></span></h2>
+        </div>
+
+        <!-- Trend chart -->
+        <div class="chart-panel">
+            <h2>Retirement Trend (CAD)</h2>
+            <div class="date-range-selector">
+                <button class="date-range-btn" data-range="30d">30 Days</button>
+                <button class="date-range-btn active" data-range="90d">90 Days</button>
+                <button class="date-range-btn" data-range="6m">6 Months</button>
+                <button class="date-range-btn" data-range="1y">1 Year</button>
+                <button class="date-range-btn" data-range="all">All Time</button>
+            </div>
+            <div class="chart-container">
+                <canvas id="retirementTrendChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/retirement.js"></script>
+</body>
+</html>

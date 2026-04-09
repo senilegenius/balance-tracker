@@ -43,13 +43,15 @@ CREATE TABLE accounts (
   plaid_item_id INTEGER REFERENCES plaid_items(id),
   institution_name VARCHAR(100) NOT NULL,
   account_name VARCHAR(100) NOT NULL,
-  account_type VARCHAR(50) NOT NULL,  -- 'checking', 'savings', 'credit', 'liability'
+  account_type VARCHAR(50) NOT NULL,  -- 'checking', 'savings', 'credit', 'liability', '401k', 'rrsp', etc.
+  account_category VARCHAR(20) NOT NULL DEFAULT 'liquid', -- 'liquid' | 'retirement'
   currency VARCHAR(3) NOT NULL,        -- 'USD' or 'CAD'
   account_mask VARCHAR(10),            -- Last 4 digits
   plaid_account_id VARCHAR(100) UNIQUE,
   is_liability BOOLEAN DEFAULT false,
   is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMP DEFAULT NOW()
+  created_at TIMESTAMP DEFAULT NOW(),
+  CONSTRAINT chk_account_category CHECK (account_category IN ('liquid', 'retirement'))
 );
 
 -- Table: balance_snapshots (historical balance data)
@@ -77,6 +79,7 @@ CREATE TABLE exchange_rates (
 CREATE INDEX idx_balance_snapshots_account_date ON balance_snapshots(account_id, date);
 CREATE INDEX idx_accounts_institution ON accounts(institution_name);
 CREATE INDEX idx_accounts_active ON accounts(is_active);
+CREATE INDEX idx_accounts_category ON accounts(account_category);
 CREATE INDEX idx_exchange_rates_currencies ON exchange_rates(from_currency, to_currency);
 
 -- Helper functions for encrypting/decrypting access tokens

@@ -23,7 +23,8 @@
     "create-user": "node db/create_user.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "migrate:account-19-to-34": "node migrations/007_migrate_account_19_to_34.js",
-    "migrate:account-11-to-35": "node migrations/008_migrate_account_11_to_35.js"
+    "migrate:account-11-to-35": "node migrations/008_migrate_account_11_to_35.js",
+    "db:migrate-category": "node migrations/010_add_account_category.js"
   },
   "author": "",
   "license": "ISC",
