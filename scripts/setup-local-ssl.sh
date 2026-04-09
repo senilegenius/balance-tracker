@@ -11,17 +11,30 @@ if [ "$(uname)" != "Darwin" ]; then
     exit 1
 fi
 
-CONTAINER_NAME="balance-tracker-caddy-1"
 CERT_PATH="/data/caddy/pki/authorities/local/root.crt"
 LOCAL_CERT="caddy-root-ca.crt"
 CERT_CN="Caddy Local Authority"
 
+# Dynamically find the Caddy container by its Docker Compose service label.
+# This works regardless of the project name, which varies based on the directory
+# docker compose is run from (e.g. balance-tracker-caddy-1 vs eager-banzai-caddy-1).
+CONTAINER_NAME=$(docker ps \
+    --filter "label=com.docker.compose.service=caddy" \
+    --format "{{.Names}}" | head -1)
+
+if [ -z "$CONTAINER_NAME" ]; then
+    echo "Error: No running Caddy container found."
+    echo "Make sure the containers are running: docker compose up -d"
+    echo "Then wait a few seconds for Caddy to generate its CA."
+    exit 1
+fi
+
+echo "Found Caddy container: $CONTAINER_NAME"
 echo "Extracting Caddy root CA certificate..."
 
 if ! docker cp "${CONTAINER_NAME}:${CERT_PATH}" "${LOCAL_CERT}" 2>/dev/null; then
-    echo "Error: Could not extract certificate."
-    echo "Make sure the containers are running: docker compose up -d"
-    echo "Then wait a few seconds for Caddy to generate its CA."
+    echo "Error: Could not extract certificate from ${CONTAINER_NAME}."
+    echo "Caddy may still be generating its CA — wait a few seconds and try again."
     exit 1
 fi
 
