@@ -622,6 +622,36 @@
                 max-width: 100%;
             }
         }
+
+        .page-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 30px;
+        }
+
+        .tab-link {
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            color: #7f8c8d;
+            background: white;
+            border: 1px solid #e0e0e0;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        }
+
+        .tab-link:hover {
+            background: #f0f0f0;
+            color: #2c3e50;
+        }
+
+        .tab-link.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
     </style>
 </head>
 <body>
@@ -632,6 +662,11 @@
                 <button class="refresh-btn" id="refreshBtn">🔄 Refresh Balances</button>
             </div>
         </h1>
+
+        <div class="page-tabs">
+            <a href="/index.html" class="tab-link active">💵 Liquid Cash</a>
+            <a href="/retirement.html" class="tab-link">🏦 Retirement</a>
+        </div>
 
         <div class="summary-panel">
             <div class="card primary">
