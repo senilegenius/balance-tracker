@@ -1300,7 +1300,7 @@ app.post('/api/exchange_public_token', async (req, res) => {
 // Refresh balances from Plaid and save to database.
 // Called directly by the EventBridge scheduler (via lambda.js) and by the
 // HTTP route below. Returns a result object; throws on error.
-async function refreshBalances({ manualBalances = {}, date = null } = {}) {
+async function refreshBalances({ manualBalances = {}, date = null, category = null } = {}) {
     // Get current exchange rate (with auto-refresh if stale)
     const exchangeRateResult = await pool.query(`
       SELECT rate, updated_at FROM exchange_rates
@@ -1379,13 +1379,20 @@ async function refreshBalances({ manualBalances = {}, date = null } = {}) {
           console.log(`   - Account: ${account.name}, Balance: ${account.balances.current}, Plaid ID: ${account.account_id}`);
 
           const accountResult = await pool.query(`
-            SELECT id, account_name, account_type, is_liability FROM accounts WHERE plaid_account_id = $1
+            SELECT id, account_name, account_type, account_category, is_liability FROM accounts WHERE plaid_account_id = $1
           `, [account.account_id]);
 
           if (accountResult.rows.length > 0) {
             const accountId = accountResult.rows[0].id;
             const accountName = accountResult.rows[0].account_name;
             const accountType = accountResult.rows[0].account_type;
+            const accountCategory = accountResult.rows[0].account_category;
+
+            // Skip this account if a category filter is active and it doesn't match
+            if (category && accountCategory !== category) {
+              console.log(`     ⏭️  Skipping ${accountName} (${accountCategory}, filter=${category})`);
+              continue;
+            }
 
             let balanceToSave = account.balances.current;
 
@@ -1489,12 +1496,17 @@ async function refreshBalances({ manualBalances = {}, date = null } = {}) {
     };
 }
 
-// Refresh balances from Plaid and save to database
+// Refresh balances from Plaid and save to database.
+// Optional body params:
+//   category     – 'liquid' | 'retirement' (omit for all)
+//   manualBalances – { accountId: balance } map for manual-only save pass
+//   date         – override today's date (used by scheduler)
 app.post('/api/refresh_balances', async (req, res) => {
   try {
     const result = await refreshBalances({
       manualBalances: req.body?.manualBalances,
       date: req.body?.date,
+      category: req.body?.category,
     });
     res.json(result);
   } catch (error) {

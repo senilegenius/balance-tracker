@@ -35,12 +35,49 @@
             font-size: 2rem;
         }
 
-        /* ── Page tabs (shared with index.html) ─────────────────────────── */
-        .page-tabs {
+        /* ── Tab row with global refresh button ─────────────────────────── */
+        .page-tabs-row {
             display: flex;
-            gap: 8px;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
             margin-bottom: 30px;
         }
+
+        .page-tabs-row .tabs-left {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-refresh-all {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: opacity 0.2s;
+            white-space: nowrap;
+        }
+        .btn-refresh-all:hover    { opacity: 0.9; }
+        .btn-refresh-all:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .btn-panel-action {
+            padding: 8px 14px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            background: white;
+            color: #2c3e50;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+        .btn-panel-action:hover    { background: #f0f0f0; }
+        .btn-panel-action:disabled { opacity: 0.6; cursor: not-allowed; }
 
         .tab-link {
             padding: 10px 20px;
@@ -607,9 +644,12 @@
     <div class="container">
         <h1>🏦 Retirement Accounts</h1>
 
-        <div class="page-tabs">
-            <a href="/index.html" class="tab-link">💵 Liquid Cash</a>
-            <a href="/retirement.html" class="tab-link active">🏦 Retirement</a>
+        <div class="page-tabs-row">
+            <div class="tabs-left">
+                <a href="/index.html" class="tab-link">💵 Liquid Cash</a>
+                <a href="/retirement.html" class="tab-link active">🏦 Retirement</a>
+            </div>
+            <button class="btn-refresh-all" id="refreshAllBtn">🔄 Refresh All Balances</button>
         </div>
 
         <!-- Summary cards — populated dynamically by retirement.js -->
@@ -625,8 +665,8 @@
             <div class="balances-panel-header">
                 <h2>Retirement Account Balances <span></span></h2>
                 <div class="balances-panel-actions">
-                    <button class="panel-action-btn secondary" id="updateBalancesBtn">✏️ Update Balances</button>
-                    <button class="panel-action-btn primary" id="addAccountBtn">＋ Add Account</button>
+                    <button class="btn-panel-action" id="addAccountBtn">➕ Add Manual Account</button>
+                    <button class="btn-panel-action" id="refreshRetirementBtn">🔄 Refresh Retirement Balances</button>
                 </div>
             </div>
         </div>
@@ -688,24 +728,6 @@
             </div>
         </div>
 
-        <!-- Update Balances modal -->
-        <div class="ret-modal" id="updateBalancesModal">
-            <div class="ret-modal-content">
-                <div class="ret-modal-header">
-                    <button class="ret-modal-close" id="closeUpdateBalancesBtn">×</button>
-                    <h2>✏️ Update Retirement Balances</h2>
-                    <p>Enter current balances for your manual accounts</p>
-                </div>
-                <div class="ret-modal-body" id="updateBalancesBody">
-                    <!-- Populated dynamically -->
-                </div>
-                <div class="ret-modal-footer">
-                    <button class="ret-modal-btn cancel" id="cancelUpdateBalancesBtn">Cancel</button>
-                    <button class="ret-modal-btn save" id="saveUpdateBalancesBtn">Save Balances</button>
-                </div>
-            </div>
-        </div>
-
         <!-- Trend chart -->
         <div class="chart-panel">
             <h2>Retirement Trend (CAD)</h2>
@@ -722,6 +744,7 @@
         </div>
     </div>
 
+    <script src="/js/refresh-modal.js"></script>
     <script src="/js/retirement.js"></script>
 </body>
 </html>

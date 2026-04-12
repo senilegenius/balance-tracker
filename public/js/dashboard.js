@@ -16,8 +16,13 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function setupEventListeners() {
-    // Refresh button
-    document.getElementById('refreshBtn').addEventListener('click', refreshBalances);
+    // Refresh buttons — all delegate to the shared triggerRefresh() from refresh-modal.js
+    document.getElementById('refreshAllBtn').addEventListener('click', function () {
+        triggerRefresh(null, this, loadDashboard);
+    });
+    document.getElementById('refreshCashBtn').addEventListener('click', function () {
+        triggerRefresh('liquid', this, loadDashboard);
+    });
 
     // Date range buttons
     document.querySelectorAll('.date-range-btn').forEach(btn => {
@@ -41,19 +46,9 @@ function setupEventListeners() {
     // Close side panel button
     document.getElementById('closeSidePanelBtn').addEventListener('click', closeSidePanel);
 
-    // Manual balance modal close button
-    document.getElementById('closeManualModalBtn').addEventListener('click', closeManualBalanceModal);
-
-    // Manual balance modal buttons
-    document.getElementById('cancelManualBtn').addEventListener('click', cancelManualBalances);
-    document.getElementById('saveManualBtn').addEventListener('click', saveManualBalances);
-
-    // Escape key to close panels
+    // Escape key to close side panel (refresh modal handles its own Escape key)
     document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            closeSidePanel();
-            closeManualBalanceModal();
-        }
+        if (e.key === 'Escape') closeSidePanel();
     });
 }
 
@@ -106,7 +101,8 @@ function updateSummaryCards(data) {
     cards[3].querySelector('.card-change').textContent = (usdCcChange >= 0 ? '▲' : '▼') + ' ' + formatCurrency(Math.abs(usdCcChange));
     cards[3].querySelector('.card-change').className = 'card-change ' + (usdCcChange >= 0 ? 'positive' : 'negative');
 
-    document.querySelector('.balances-panel h2 span').textContent = 'as of ' + formatDate(data.date);
+    const dateNote = document.getElementById('balancesDateNote');
+    if (dateNote) dateNote.textContent = 'as of ' + formatDate(data.date);
 }
 
 function updateAccountBalances(data) {
@@ -586,221 +582,4 @@ function closeSidePanel() {
     document.querySelector('.container').style.filter = '';
 }
 
-function closeManualBalanceModal() {
-    document.getElementById('manualBalanceModal').classList.remove('show');
-}
 
-let plaidRefreshResult = null;
-let plaidRefreshPromise = null;
-
-async function refreshBalances() {
-    const btn = document.getElementById('refreshBtn');
-
-    btn.disabled = true;
-    btn.textContent = '⏳ Refreshing...';
-
-    try {
-        // Step 1: Check for manual accounts FIRST (fast query)
-        const manualAccountsResponse = await fetch('/api/manual_accounts');
-        const manualAccounts = await manualAccountsResponse.json();
-
-        // Step 2: Start Plaid refresh in background (don't await yet)
-        plaidRefreshPromise = fetch('/api/refresh_balances', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        }).then(r => r.json());
-
-        // Step 3: Show manual modal immediately if needed
-        if (manualAccounts.length > 0) {
-            // Get exchange rate for modal display
-            const rateResponse = await fetch('/api/exchange_rate');
-            const rateData = await rateResponse.json();
-            const today = new Date().toLocaleDateString('en-CA');
-
-            // Show modal NOW (Plaid still running in background)
-            showManualBalanceModal(manualAccounts, today, rateData.rate);
-
-            // Store the result when Plaid finishes
-            plaidRefreshPromise.then(result => {
-                plaidRefreshResult = result;
-            }).catch(error => {
-                console.error('Background Plaid refresh failed:', error);
-            });
-        } else {
-            // No manual accounts, wait for Plaid and show success
-            const result = await plaidRefreshPromise;
-            if (result.success) {
-                showFinalSuccess(result);
-            } else {
-                alert('❌ Failed to refresh Plaid accounts.');
-            }
-            btn.disabled = false;
-            btn.textContent = '🔄 Refresh Balances';
-        }
-
-    } catch (error) {
-        alert('❌ Error: ' + error.message);
-        btn.disabled = false;
-        btn.textContent = '🔄 Refresh Balances';
-    }
-}
-
-function showManualBalanceModal(accounts, date, exchangeRate) {
-    const modal = document.getElementById('manualBalanceModal');
-    const body = document.getElementById('manualBalanceBody');
-    const subtitle = document.getElementById('manualModalSubtitle');
-
-    subtitle.textContent = `Date: ${date}  |  Exchange Rate: ${exchangeRate.toFixed(4)}`;
-
-    // Build the form
-    body.innerHTML = '';
-
-    let hasLiabilities = false;
-
-    accounts.forEach(account => {
-        if (account.is_liability) hasLiabilities = true;
-
-        const item = document.createElement('div');
-        item.className = 'manual-account-item';
-
-        const lastBalance = account.last_balance !== null ? Math.abs(parseFloat(account.last_balance)) : '';
-
-        item.innerHTML = `
-            <div class="manual-account-name">${account.account_name}</div>
-            <div class="manual-account-current">
-                ${account.account_type} • ${account.currency}
-                ${account.last_balance !== null ? ` • Current: ${formatCurrency(account.last_balance)}` : ''}
-            </div>
-            <div class="manual-account-input-group">
-                <input
-                    type="number"
-                    step="0.01"
-                    class="manual-account-input"
-                    id="manual-input-${account.id}"
-                    data-account-id="${account.id}"
-                    data-is-liability="${account.is_liability}"
-                    value="${lastBalance}"
-                    placeholder="Enter balance"
-                >
-                <span class="manual-account-currency">${account.currency}</span>
-            </div>
-        `;
-
-        body.appendChild(item);
-    });
-
-    // Add liability help note if needed
-    if (hasLiabilities) {
-        const helpNote = document.createElement('div');
-        helpNote.className = 'liability-help';
-        helpNote.innerHTML = 'ℹ️ <strong>Liability accounts:</strong> Enter positive numbers (e.g., 15606.10). They will be saved as negative automatically.';
-        body.appendChild(helpNote);
-    }
-
-    modal.classList.add('show');
-}
-
-function closeManualBalanceModal() {
-    document.getElementById('manualBalanceModal').classList.remove('show');
-}
-
-function cancelManualBalances() {
-    closeManualBalanceModal();
-
-    // Wait for Plaid to finish before showing success
-    if (plaidRefreshPromise) {
-        plaidRefreshPromise.then(result => {
-            if (result.success) {
-                showFinalSuccess(result);
-            }
-        }).catch(error => {
-            console.error('Plaid refresh error:', error);
-        });
-    }
-
-    // Re-enable refresh button
-    const btn = document.getElementById('refreshBtn');
-    btn.disabled = false;
-    btn.textContent = '🔄 Refresh Balances';
-}
-
-async function saveManualBalances() {
-    const saveBtn = document.querySelector('.manual-balance-btn.save');
-    const cancelBtn = document.querySelector('.manual-balance-btn.cancel');
-
-    // Disable buttons
-    saveBtn.disabled = true;
-    cancelBtn.disabled = true;
-
-    const inputs = document.querySelectorAll('.manual-account-input');
-    const manualBalances = {};
-
-    inputs.forEach(input => {
-        const accountId = input.dataset.accountId;
-        const value = input.value.trim();
-
-        if (value !== '') {
-            manualBalances[accountId] = value;
-        }
-    });
-
-    try {
-        // Wait for Plaid to finish first
-        saveBtn.textContent = 'Waiting for Plaid refresh...';
-        const plaidResult = await plaidRefreshPromise;
-
-        if (!plaidResult.success) {
-            alert('❌ Plaid refresh failed. Manual balances not saved.');
-            saveBtn.disabled = false;
-            cancelBtn.disabled = false;
-            saveBtn.textContent = 'Save Balances';
-            return;
-        }
-
-        // Now save manual balances
-        saveBtn.textContent = 'Saving manual balances...';
-        const response = await fetch('/api/refresh_balances', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ manualBalances })
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            closeManualBalanceModal();
-
-            // Combine totals from both calls
-            const combinedResult = {
-                success: true,
-                accountsUpdated: plaidResult.accountsUpdated + result.manualAccountsUpdated,
-                date: result.date,
-                exchangeRate: result.exchangeRate
-            };
-
-            showFinalSuccess(combinedResult);
-            loadDashboard();
-        } else {
-            alert('❌ Failed to save manual balances.');
-            saveBtn.disabled = false;
-            cancelBtn.disabled = false;
-            saveBtn.textContent = 'Save Balances';
-        }
-
-    } catch (error) {
-        alert('❌ Error: ' + error.message);
-        saveBtn.disabled = false;
-        cancelBtn.disabled = false;
-        saveBtn.textContent = 'Save Balances';
-    } finally {
-        // Re-enable refresh button
-        const btn = document.getElementById('refreshBtn');
-        btn.disabled = false;
-        btn.textContent = '🔄 Refresh Balances';
-    }
-}
-
-function showFinalSuccess(result) {
-    alert(`✅ Successfully refreshed ${result.accountsUpdated} accounts!\n\nDate: ${result.date}\nExchange Rate: ${result.exchangeRate.toFixed(4)}`);
-    loadDashboard();
-}

@@ -39,31 +39,62 @@
             align-items: center;
         }
 
-        .header-actions {
+        /* ── Tab row with global button ─── */
+        .page-tabs-row {
             display: flex;
-            gap: 10px;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 30px;
         }
 
-       .refresh-btn {
-           background: #667eea;
-           color: white;
-           border: none;
-           padding: 10px 20px;
-           border-radius: 8px;
-           cursor: pointer;
-           font-size: 0.9rem;
-           font-weight: 600;
-           transition: background 0.2s;
-       }
+        .page-tabs-row .tabs-left {
+            display: flex;
+            gap: 8px;
+        }
 
-       .refresh-btn:hover {
-           background: #5568d3;
-       }
+        /* ── Shared button styles ──────── */
+        .btn-refresh-all {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: opacity 0.2s;
+            white-space: nowrap;
+        }
+        .btn-refresh-all:hover    { opacity: 0.9; }
+        .btn-refresh-all:disabled { opacity: 0.6; cursor: not-allowed; }
 
-       .refresh-btn:disabled {
-           background: #95a5a6;
-           cursor: not-allowed;
-       }
+        .btn-panel-action {
+            padding: 8px 14px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            background: white;
+            color: #2c3e50;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+        .btn-panel-action:hover    { background: #f0f0f0; }
+        .btn-panel-action:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        /* ── Balances panel header ─────── */
+        .balances-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .balances-panel-header h2 { margin: 0; }
+        .balances-panel-actions   { display: flex; gap: 8px; }
 
         .summary-panel {
             display: grid;
@@ -656,16 +687,14 @@
 </head>
 <body>
     <div class="container">
-        <h1>
-            💰 Financial Dashboard
-            <div class="header-actions">
-                <button class="refresh-btn" id="refreshBtn">🔄 Refresh Balances</button>
-            </div>
-        </h1>
+        <h1>💰 Financial Dashboard</h1>
 
-        <div class="page-tabs">
-            <a href="/index.html" class="tab-link active">💵 Liquid Cash</a>
-            <a href="/retirement.html" class="tab-link">🏦 Retirement</a>
+        <div class="page-tabs-row">
+            <div class="tabs-left">
+                <a href="/index.html" class="tab-link active">💵 Liquid Cash</a>
+                <a href="/retirement.html" class="tab-link">🏦 Retirement</a>
+            </div>
+            <button class="btn-refresh-all" id="refreshAllBtn">🔄 Refresh All Balances</button>
         </div>
 
         <div class="summary-panel">
@@ -701,7 +730,12 @@
         </div>
 
         <div class="balances-panel">
-            <h2>Current Account Balances <span style="color: #7f8c8d; font-size: 0.9rem; font-weight: normal;">Loading...</span></h2>
+            <div class="balances-panel-header">
+                <h2>Current Account Balances <span id="balancesDateNote" style="color:#7f8c8d;font-size:0.9rem;font-weight:normal;">Loading...</span></h2>
+                <div class="balances-panel-actions">
+                    <button class="btn-panel-action" id="refreshCashBtn">🔄 Refresh Cash Balances</button>
+                </div>
+            </div>
         </div>
 
         <div class="chart-panel">
@@ -744,26 +778,7 @@
         </div>
     </div>
 
-    <!-- Manual Balance Entry Modal -->
-    <div class="manual-balance-modal" id="manualBalanceModal">
-        <div class="manual-balance-content">
-            <div class="manual-balance-header">
-                <button class="manual-balance-close" id="closeManualModalBtn">×</button>
-                <h2>💰 Update Manual Account Balances</h2>
-                <p id="manualModalSubtitle">Enter balances for accounts not managed by Plaid</p>
-            </div>
-
-            <div class="manual-balance-body" id="manualBalanceBody">
-                <!-- Account inputs will be populated here -->
-            </div>
-
-            <div class="manual-balance-footer">
-                <button class="manual-balance-btn cancel" id="cancelManualBtn">Cancel</button>
-                <button class="manual-balance-btn save" id="saveManualBtn">Save Balances</button>
-            </div>
-        </div>
-    </div>
-
+    <script src="/js/refresh-modal.js"></script>
     <script src="/js/dashboard.js"></script>
 </body>
 </html>

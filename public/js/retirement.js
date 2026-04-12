@@ -472,142 +472,20 @@ async function saveNewAccount() {
     }
 }
 
-// ─── Update Balances modal ─────────────────────────────────────────────────
-
-async function showUpdateBalancesModal() {
-    const body = document.getElementById('updateBalancesBody');
-    body.innerHTML = '<p style="color:#7f8c8d;padding:8px 0;">Loading accounts…</p>';
-
-    const btn = document.getElementById('saveUpdateBalancesBtn');
-    btn.disabled = false;
-    btn.textContent = 'Save Balances';
-
-    document.getElementById('updateBalancesModal').classList.add('show');
-
-    try {
-        const res = await fetch('/api/manual_accounts?category=retirement');
-        if (!res.ok) throw new Error('Failed to load accounts');
-        const accounts = await res.json();
-
-        if (!accounts.length) {
-            body.innerHTML = '<p style="color:#7f8c8d;">No manual accounts yet. Use <strong>＋ Add Account</strong> to get started.</p>';
-            btn.disabled = true;
-            return;
-        }
-
-        body.innerHTML = '';
-        accounts.forEach(account => {
-            const currentBalance = account.last_balance !== null && account.last_balance !== undefined
-                ? parseFloat(account.last_balance)
-                : '';
-
-            const item = document.createElement('div');
-            item.className = 'update-account-item';
-
-            const nameEl = document.createElement('div');
-            nameEl.className = 'update-account-name';
-            nameEl.textContent = account.account_name;
-
-            const metaEl = document.createElement('div');
-            metaEl.className = 'update-account-meta';
-            metaEl.textContent = `${account.institution_name} · ${typeLabel(account.account_type)}`;
-
-            const inputGroup = document.createElement('div');
-            inputGroup.className = 'update-account-input-group';
-
-            const input = document.createElement('input');
-            input.type = 'number';
-            input.className = 'update-account-input';
-            input.dataset.accountId = account.id;
-            input.value = currentBalance;
-            input.placeholder = 'Enter balance';
-            input.step = '0.01';
-            input.min = '0';
-
-            const currencyLabel = document.createElement('span');
-            currencyLabel.className = 'update-account-currency';
-            currencyLabel.textContent = account.currency;
-
-            inputGroup.appendChild(input);
-            inputGroup.appendChild(currencyLabel);
-            item.appendChild(nameEl);
-            item.appendChild(metaEl);
-            item.appendChild(inputGroup);
-            body.appendChild(item);
-        });
-    } catch (err) {
-        body.innerHTML = `<p style="color:#e74c3c;">Failed to load accounts: ${err.message}</p>`;
-        btn.disabled = true;
-    }
-}
-
-function closeUpdateBalancesModal() {
-    document.getElementById('updateBalancesModal').classList.remove('show');
-}
-
-async function saveRetirementBalances() {
-    const inputs = document.querySelectorAll('#updateBalancesBody .update-account-input');
-    const manualBalances = {};
-    let hasError = false;
-
-    inputs.forEach(input => {
-        const val = input.value.trim();
-        if (val === '') return; // Skip blank inputs
-        const num = parseFloat(val);
-        if (isNaN(num)) {
-            input.style.borderColor = '#e74c3c';
-            hasError = true;
-        } else {
-            input.style.borderColor = '';
-            manualBalances[input.dataset.accountId] = num;
-        }
-    });
-
-    if (hasError) return;
-    if (!Object.keys(manualBalances).length) {
-        closeUpdateBalancesModal();
-        return;
-    }
-
-    const btn = document.getElementById('saveUpdateBalancesBtn');
-    btn.disabled = true;
-    btn.textContent = 'Saving…';
-
-    try {
-        const res = await fetch('/api/refresh_balances', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ manualBalances }),
-        });
-        if (!res.ok) {
-            const data = await res.json();
-            throw new Error(data.error || 'Failed to save balances');
-        }
-
-        closeUpdateBalancesModal();
-        await loadRetirementDashboard();
-    } catch (err) {
-        btn.disabled = false;
-        btn.textContent = 'Save Balances';
-        // Show error inline above footer
-        const body = document.getElementById('updateBalancesBody');
-        let errEl = document.getElementById('updateBalancesError');
-        if (!errEl) {
-            errEl = document.createElement('div');
-            errEl.id = 'updateBalancesError';
-            errEl.style.cssText = 'background:#fdf0f0;border-left:4px solid #e74c3c;padding:10px 14px;border-radius:4px;color:#c0392b;font-size:0.9rem;margin-bottom:16px;';
-            body.prepend(errEl);
-        }
-        errEl.textContent = err.message || 'Something went wrong. Please try again.';
-    }
-}
 
 // ─── Modal event listeners (called on DOMContentLoaded) ────────────────────
 
 function setupModalEventListeners() {
     // Panel action buttons
     document.getElementById('addAccountBtn').addEventListener('click', showAddAccountModal);
-    document.getElementById('updateBalancesBtn').addEventListener('click', showUpdateBalancesModal);
+
+    // Refresh buttons — delegate to shared triggerRefresh() from refresh-modal.js
+    document.getElementById('refreshRetirementBtn').addEventListener('click', function () {
+        triggerRefresh('retirement', this, loadRetirementDashboard);
+    });
+    document.getElementById('refreshAllBtn').addEventListener('click', function () {
+        triggerRefresh(null, this, loadRetirementDashboard);
+    });
 
     // Add Account modal
     document.getElementById('closeAddAccountBtn').addEventListener('click', closeAddAccountModal);
@@ -617,19 +495,11 @@ function setupModalEventListeners() {
         if (e.target === this) closeAddAccountModal();
     });
 
-    // Update Balances modal
-    document.getElementById('closeUpdateBalancesBtn').addEventListener('click', closeUpdateBalancesModal);
-    document.getElementById('cancelUpdateBalancesBtn').addEventListener('click', closeUpdateBalancesModal);
-    document.getElementById('saveUpdateBalancesBtn').addEventListener('click', saveRetirementBalances);
-    document.getElementById('updateBalancesModal').addEventListener('click', function (e) {
-        if (e.target === this) closeUpdateBalancesModal();
-    });
-
-    // Escape key closes whichever modal is open
+    // Escape key closes Add Account modal (refresh modal handles its own Escape)
     document.addEventListener('keydown', function (e) {
-        if (e.key !== 'Escape') return;
-        if (document.getElementById('addAccountModal').classList.contains('show')) closeAddAccountModal();
-        if (document.getElementById('updateBalancesModal').classList.contains('show')) closeUpdateBalancesModal();
+        if (e.key === 'Escape' && document.getElementById('addAccountModal').classList.contains('show')) {
+            closeAddAccountModal();
+        }
     });
 }
 
