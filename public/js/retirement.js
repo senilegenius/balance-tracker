@@ -1,7 +1,9 @@
 // retirement.js — Retirement accounts dashboard
 
-// ─── Auth guard ────────────────────────────────────────────────────────────
+// ─── Auth guard + event wiring ────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function () {
+    setupModalEventListeners();
+
     fetch('/api/check-auth')
         .then(r => r.json())
         .then(data => {
@@ -600,23 +602,34 @@ async function saveRetirementBalances() {
     }
 }
 
-// ─── Keyboard / overlay close for modals ───────────────────────────────────
+// ─── Modal event listeners (called on DOMContentLoaded) ────────────────────
 
-document.addEventListener('keydown', function (e) {
-    if (e.key !== 'Escape') return;
-    if (document.getElementById('addAccountModal').classList.contains('show')) {
-        closeAddAccountModal();
-    }
-    if (document.getElementById('updateBalancesModal').classList.contains('show')) {
-        closeUpdateBalancesModal();
-    }
-});
+function setupModalEventListeners() {
+    // Panel action buttons
+    document.getElementById('addAccountBtn').addEventListener('click', showAddAccountModal);
+    document.getElementById('updateBalancesBtn').addEventListener('click', showUpdateBalancesModal);
 
-document.getElementById('addAccountModal').addEventListener('click', function (e) {
-    if (e.target === this) closeAddAccountModal();
-});
+    // Add Account modal
+    document.getElementById('closeAddAccountBtn').addEventListener('click', closeAddAccountModal);
+    document.getElementById('cancelAddAccountBtn').addEventListener('click', closeAddAccountModal);
+    document.getElementById('saveAddAccountBtn').addEventListener('click', saveNewAccount);
+    document.getElementById('addAccountModal').addEventListener('click', function (e) {
+        if (e.target === this) closeAddAccountModal();
+    });
 
-document.getElementById('updateBalancesModal').addEventListener('click', function (e) {
-    if (e.target === this) closeUpdateBalancesModal();
-});
+    // Update Balances modal
+    document.getElementById('closeUpdateBalancesBtn').addEventListener('click', closeUpdateBalancesModal);
+    document.getElementById('cancelUpdateBalancesBtn').addEventListener('click', closeUpdateBalancesModal);
+    document.getElementById('saveUpdateBalancesBtn').addEventListener('click', saveRetirementBalances);
+    document.getElementById('updateBalancesModal').addEventListener('click', function (e) {
+        if (e.target === this) closeUpdateBalancesModal();
+    });
+
+    // Escape key closes whichever modal is open
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        if (document.getElementById('addAccountModal').classList.contains('show')) closeAddAccountModal();
+        if (document.getElementById('updateBalancesModal').classList.contains('show')) closeUpdateBalancesModal();
+    });
+}
 

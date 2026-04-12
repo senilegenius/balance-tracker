@@ -625,8 +625,8 @@
             <div class="balances-panel-header">
                 <h2>Retirement Account Balances <span></span></h2>
                 <div class="balances-panel-actions">
-                    <button class="panel-action-btn secondary" onclick="showUpdateBalancesModal()">✏️ Update Balances</button>
-                    <button class="panel-action-btn primary" onclick="showAddAccountModal()">＋ Add Account</button>
+                    <button class="panel-action-btn secondary" id="updateBalancesBtn">✏️ Update Balances</button>
+                    <button class="panel-action-btn primary" id="addAccountBtn">＋ Add Account</button>
                 </div>
             </div>
         </div>
@@ -635,7 +635,7 @@
         <div class="ret-modal" id="addAccountModal">
             <div class="ret-modal-content">
                 <div class="ret-modal-header">
-                    <button class="ret-modal-close" onclick="closeAddAccountModal()">×</button>
+                    <button class="ret-modal-close" id="closeAddAccountBtn">×</button>
                     <h2>＋ Add Retirement Account</h2>
                     <p>Manually add an account not supported by Plaid</p>
                 </div>
@@ -682,8 +682,8 @@
                     </div>
                 </div>
                 <div class="ret-modal-footer">
-                    <button class="ret-modal-btn cancel" onclick="closeAddAccountModal()">Cancel</button>
-                    <button class="ret-modal-btn save" id="saveAddAccountBtn" onclick="saveNewAccount()">Save Account</button>
+                    <button class="ret-modal-btn cancel" id="cancelAddAccountBtn">Cancel</button>
+                    <button class="ret-modal-btn save" id="saveAddAccountBtn">Save Account</button>
                 </div>
             </div>
         </div>
@@ -692,7 +692,7 @@
         <div class="ret-modal" id="updateBalancesModal">
             <div class="ret-modal-content">
                 <div class="ret-modal-header">
-                    <button class="ret-modal-close" onclick="closeUpdateBalancesModal()">×</button>
+                    <button class="ret-modal-close" id="closeUpdateBalancesBtn">×</button>
                     <h2>✏️ Update Retirement Balances</h2>
                     <p>Enter current balances for your manual accounts</p>
                 </div>
@@ -700,8 +700,8 @@
                     <!-- Populated dynamically -->
                 </div>
                 <div class="ret-modal-footer">
-                    <button class="ret-modal-btn cancel" onclick="closeUpdateBalancesModal()">Cancel</button>
-                    <button class="ret-modal-btn save" id="saveUpdateBalancesBtn" onclick="saveRetirementBalances()">Save Balances</button>
+                    <button class="ret-modal-btn cancel" id="cancelUpdateBalancesBtn">Cancel</button>
+                    <button class="ret-modal-btn save" id="saveUpdateBalancesBtn">Save Balances</button>
                 </div>
             </div>
         </div>
