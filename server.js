@@ -381,12 +381,22 @@ app.get('/api/accounts', async (req, res) => {
   }
 });
 
-// Get manual accounts (accounts without plaid_account_id) with their last balances
+// Get manual accounts (accounts without plaid_account_id) with their last balances.
+// Accepts optional ?category=retirement (or 'liquid') to filter by account_category.
 app.get('/api/manual_accounts', async (req, res) => {
   try {
+    const { category } = req.query;
+    const params = [];
+    let categoryFilter = '';
+    if (category) {
+      params.push(category);
+      categoryFilter = `AND a.account_category = $1`;
+    }
+
     const result = await pool.query(`
       SELECT
         a.id,
+        a.institution_name,
         a.account_name,
         a.currency,
         a.account_type,
@@ -401,13 +411,65 @@ app.get('/api/manual_accounts', async (req, res) => {
       FROM accounts a
       WHERE a.plaid_account_id IS NULL
         AND a.is_active = true
+        ${categoryFilter}
       ORDER BY a.institution_name, a.account_name
-    `);
+    `, params);
 
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching manual accounts:', error);
     res.status(500).json({ error: 'Failed to fetch manual accounts' });
+  }
+});
+
+// Create a new manual retirement account (no Plaid connection).
+// Optionally records an initial balance snapshot for today.
+app.post('/api/accounts/manual', async (req, res) => {
+  try {
+    const { institution_name, account_name, account_type, currency, initial_balance } = req.body;
+
+    if (!institution_name || !account_name || !account_type || !currency) {
+      return res.status(400).json({ error: 'institution_name, account_name, account_type, and currency are required' });
+    }
+
+    if (!['CAD', 'USD'].includes(currency)) {
+      return res.status(400).json({ error: 'currency must be CAD or USD' });
+    }
+
+    const accountResult = await pool.query(`
+      INSERT INTO accounts
+        (institution_name, account_name, account_type, account_category, currency, is_liability, is_active)
+      VALUES ($1, $2, $3, 'retirement', $4, false, true)
+      RETURNING id, account_name, institution_name, account_type
+    `, [
+      institution_name.trim(),
+      account_name.trim(),
+      account_type.trim().toLowerCase(),
+      currency,
+    ]);
+
+    const account = accountResult.rows[0];
+
+    // Record an initial balance snapshot if one was provided
+    const parsedBalance = parseFloat(initial_balance);
+    if (initial_balance !== undefined && initial_balance !== null && initial_balance !== '' && !isNaN(parsedBalance) && parsedBalance >= 0) {
+      const rateResult = await pool.query(`
+        SELECT rate FROM exchange_rates WHERE from_currency = 'USD' AND to_currency = 'CAD'
+      `);
+      const rate = rateResult.rows.length > 0 ? parseFloat(rateResult.rows[0].rate) : null;
+      const today = new Date().toISOString().split('T')[0];
+
+      await pool.query(`
+        INSERT INTO balance_snapshots (account_id, balance, date, usd_to_cad_rate)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (account_id, date) DO UPDATE SET balance = $2, usd_to_cad_rate = $4
+      `, [account.id, parsedBalance, today, rate]);
+    }
+
+    res.json({ success: true, account });
+  } catch (error) {
+    console.error('Error creating manual account:', error);
+    res.status(500).json({ error: 'Failed to create manual account' });
   }
 });
 

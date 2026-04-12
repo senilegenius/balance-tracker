@@ -290,6 +290,292 @@
             width: 100%;
         }
 
+        /* ── Balances panel header ──────────────────────────────────────── */
+        .balances-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .balances-panel-header h2 {
+            margin: 0;
+            color: #2c3e50;
+            font-size: 1.5rem;
+        }
+
+        .balances-panel-header h2 span {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+            font-weight: normal;
+        }
+
+        .balances-panel-actions {
+            display: flex;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        .panel-action-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .panel-action-btn.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .panel-action-btn.primary:hover {
+            opacity: 0.9;
+        }
+
+        .panel-action-btn.secondary {
+            background: #f8f9fa;
+            color: #2c3e50;
+            border: 1px solid #e0e0e0;
+        }
+
+        .panel-action-btn.secondary:hover {
+            background: #e9ecef;
+        }
+
+        /* ── Shared modal base ───────────────────────────────────────────── */
+        .ret-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .ret-modal.show {
+            display: flex;
+        }
+
+        .ret-modal-content {
+            background: white;
+            border-radius: 16px;
+            max-width: 560px;
+            width: 100%;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .ret-modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 24px;
+            border-radius: 16px 16px 0 0;
+            position: relative;
+        }
+
+        .ret-modal-header h2 {
+            margin: 0;
+            font-size: 1.4rem;
+        }
+
+        .ret-modal-header p {
+            margin: 6px 0 0 0;
+            opacity: 0.9;
+            font-size: 0.9rem;
+        }
+
+        .ret-modal-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            font-size: 1.3rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+
+        .ret-modal-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .ret-modal-body {
+            padding: 24px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .ret-modal-footer {
+            padding: 20px 24px;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .ret-modal-btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .ret-modal-btn.cancel {
+            background: #f8f9fa;
+            color: #2c3e50;
+        }
+
+        .ret-modal-btn.cancel:hover {
+            background: #e9ecef;
+        }
+
+        .ret-modal-btn.save {
+            background: #667eea;
+            color: white;
+        }
+
+        .ret-modal-btn.save:hover {
+            background: #5568d3;
+        }
+
+        .ret-modal-btn:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        /* ── Add account form fields ─────────────────────────────────────── */
+        .form-field {
+            margin-bottom: 20px;
+        }
+
+        .form-field label {
+            display: block;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 6px;
+            font-size: 0.9rem;
+        }
+
+        .form-field input,
+        .form-field select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-family: inherit;
+            color: #2c3e50;
+            transition: border-color 0.2s;
+        }
+
+        .form-field input:focus,
+        .form-field select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-field input[type="number"] {
+            font-family: monospace;
+        }
+
+        .form-field .field-hint {
+            margin-top: 4px;
+            font-size: 0.8rem;
+            color: #95a5a6;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .ret-modal-error {
+            background: #fdf0f0;
+            border-left: 4px solid #e74c3c;
+            padding: 10px 14px;
+            border-radius: 4px;
+            color: #c0392b;
+            font-size: 0.9rem;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        /* ── Update balances rows ────────────────────────────────────────── */
+        .update-account-item {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .update-account-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .update-account-name {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 2px;
+        }
+
+        .update-account-meta {
+            color: #7f8c8d;
+            font-size: 0.85rem;
+            margin-bottom: 8px;
+        }
+
+        .update-account-input-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .update-account-input {
+            flex: 1;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-family: monospace;
+        }
+
+        .update-account-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .update-account-currency {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+            font-weight: 600;
+            min-width: 40px;
+        }
+
         /* ── Responsive ─────────────────────────────────────────────────── */
         @media (max-width: 1200px) {
             .summary-panel {
@@ -336,7 +622,88 @@
 
         <!-- Account balances — institutions + rows populated by retirement.js -->
         <div class="balances-panel">
-            <h2>Retirement Account Balances <span></span></h2>
+            <div class="balances-panel-header">
+                <h2>Retirement Account Balances <span></span></h2>
+                <div class="balances-panel-actions">
+                    <button class="panel-action-btn secondary" id="updateBalancesBtn">✏️ Update Balances</button>
+                    <button class="panel-action-btn primary" id="addAccountBtn">＋ Add Account</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Account modal -->
+        <div class="ret-modal" id="addAccountModal">
+            <div class="ret-modal-content">
+                <div class="ret-modal-header">
+                    <button class="ret-modal-close" id="closeAddAccountBtn">×</button>
+                    <h2>＋ Add Retirement Account</h2>
+                    <p>Manually add an account not supported by Plaid</p>
+                </div>
+                <div class="ret-modal-body">
+                    <div class="ret-modal-error" id="addAccountError"></div>
+                    <div class="form-field">
+                        <label for="addInstitution">Institution</label>
+                        <input type="text" id="addInstitution" placeholder="e.g. Fidelity" autocomplete="organization">
+                    </div>
+                    <div class="form-field">
+                        <label for="addAccountName">Account Name</label>
+                        <input type="text" id="addAccountName" placeholder="e.g. Roth IRA" autocomplete="off">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label for="addAccountType">Account Type</label>
+                            <select id="addAccountType">
+                                <option value="401k">401(k)</option>
+                                <option value="403b">403(b)</option>
+                                <option value="457b">457(b)</option>
+                                <option value="ira">IRA</option>
+                                <option value="roth" selected>Roth IRA</option>
+                                <option value="roth 401k">Roth 401(k)</option>
+                                <option value="rrsp">RRSP</option>
+                                <option value="tfsa">TFSA</option>
+                                <option value="lira">LIRA</option>
+                                <option value="rrif">RRIF</option>
+                                <option value="resp">RESP</option>
+                                <option value="pension">Pension</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label for="addCurrency">Currency</label>
+                            <select id="addCurrency">
+                                <option value="CAD">CAD</option>
+                                <option value="USD">USD</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-field">
+                        <label for="addInitialBalance">Initial Balance</label>
+                        <input type="number" id="addInitialBalance" placeholder="Optional" step="0.01" min="0">
+                        <div class="field-hint">Leave blank to add the account with no balance history yet</div>
+                    </div>
+                </div>
+                <div class="ret-modal-footer">
+                    <button class="ret-modal-btn cancel" id="cancelAddAccountBtn">Cancel</button>
+                    <button class="ret-modal-btn save" id="saveAddAccountBtn">Save Account</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Update Balances modal -->
+        <div class="ret-modal" id="updateBalancesModal">
+            <div class="ret-modal-content">
+                <div class="ret-modal-header">
+                    <button class="ret-modal-close" id="closeUpdateBalancesBtn">×</button>
+                    <h2>✏️ Update Retirement Balances</h2>
+                    <p>Enter current balances for your manual accounts</p>
+                </div>
+                <div class="ret-modal-body" id="updateBalancesBody">
+                    <!-- Populated dynamically -->
+                </div>
+                <div class="ret-modal-footer">
+                    <button class="ret-modal-btn cancel" id="cancelUpdateBalancesBtn">Cancel</button>
+                    <button class="ret-modal-btn save" id="saveUpdateBalancesBtn">Save Balances</button>
+                </div>
+            </div>
         </div>
 
         <!-- Trend chart -->
