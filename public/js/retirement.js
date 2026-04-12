@@ -151,7 +151,7 @@ function renderSummaryCards(data) {
     });
 
     // Update the balances panel header date
-    const balancesHeading = document.querySelector('.balances-panel h2 span');
+    const balancesHeading = document.querySelector('.balances-panel-header h2 span');
     if (balancesHeading) {
         balancesHeading.textContent = data.date ? 'as of ' + formatDate(data.date) : '';
     }
@@ -398,3 +398,225 @@ function toggleInstitution(header) {
     accountsDiv.classList.toggle('collapsed');
     chevron.classList.toggle('open');
 }
+
+// ─── Add Account modal ─────────────────────────────────────────────────────
+
+function showAddAccountModal() {
+    // Clear form
+    document.getElementById('addInstitution').value = '';
+    document.getElementById('addAccountName').value = '';
+    document.getElementById('addAccountType').value = 'roth';
+    document.getElementById('addCurrency').value = 'CAD';
+    document.getElementById('addInitialBalance').value = '';
+    setAddAccountError('');
+
+    const btn = document.getElementById('saveAddAccountBtn');
+    btn.disabled = false;
+    btn.textContent = 'Save Account';
+
+    document.getElementById('addAccountModal').classList.add('show');
+    document.getElementById('addInstitution').focus();
+}
+
+function closeAddAccountModal() {
+    document.getElementById('addAccountModal').classList.remove('show');
+}
+
+function setAddAccountError(msg) {
+    const el = document.getElementById('addAccountError');
+    el.textContent = msg;
+    el.style.display = msg ? 'block' : 'none';
+}
+
+async function saveNewAccount() {
+    const institution_name = document.getElementById('addInstitution').value.trim();
+    const account_name = document.getElementById('addAccountName').value.trim();
+    const account_type = document.getElementById('addAccountType').value;
+    const currency = document.getElementById('addCurrency').value;
+    const initialBalanceRaw = document.getElementById('addInitialBalance').value.trim();
+
+    if (!institution_name) { setAddAccountError('Institution name is required.'); return; }
+    if (!account_name)     { setAddAccountError('Account name is required.'); return; }
+
+    const initial_balance = initialBalanceRaw !== '' ? parseFloat(initialBalanceRaw) : undefined;
+    if (initialBalanceRaw !== '' && isNaN(initial_balance)) {
+        setAddAccountError('Initial balance must be a valid number.');
+        return;
+    }
+
+    const btn = document.getElementById('saveAddAccountBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    setAddAccountError('');
+
+    try {
+        const res = await fetch('/api/accounts/manual', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ institution_name, account_name, account_type, currency, initial_balance }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to save account');
+        }
+
+        closeAddAccountModal();
+        await loadRetirementDashboard();
+    } catch (err) {
+        setAddAccountError(err.message || 'Something went wrong. Please try again.');
+        btn.disabled = false;
+        btn.textContent = 'Save Account';
+    }
+}
+
+// ─── Update Balances modal ─────────────────────────────────────────────────
+
+async function showUpdateBalancesModal() {
+    const body = document.getElementById('updateBalancesBody');
+    body.innerHTML = '<p style="color:#7f8c8d;padding:8px 0;">Loading accounts…</p>';
+
+    const btn = document.getElementById('saveUpdateBalancesBtn');
+    btn.disabled = false;
+    btn.textContent = 'Save Balances';
+
+    document.getElementById('updateBalancesModal').classList.add('show');
+
+    try {
+        const res = await fetch('/api/manual_accounts?category=retirement');
+        if (!res.ok) throw new Error('Failed to load accounts');
+        const accounts = await res.json();
+
+        if (!accounts.length) {
+            body.innerHTML = '<p style="color:#7f8c8d;">No manual accounts yet. Use <strong>＋ Add Account</strong> to get started.</p>';
+            btn.disabled = true;
+            return;
+        }
+
+        body.innerHTML = '';
+        accounts.forEach(account => {
+            const currentBalance = account.last_balance !== null && account.last_balance !== undefined
+                ? parseFloat(account.last_balance)
+                : '';
+
+            const item = document.createElement('div');
+            item.className = 'update-account-item';
+
+            const nameEl = document.createElement('div');
+            nameEl.className = 'update-account-name';
+            nameEl.textContent = account.account_name;
+
+            const metaEl = document.createElement('div');
+            metaEl.className = 'update-account-meta';
+            metaEl.textContent = `${account.institution_name} · ${typeLabel(account.account_type)}`;
+
+            const inputGroup = document.createElement('div');
+            inputGroup.className = 'update-account-input-group';
+
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'update-account-input';
+            input.dataset.accountId = account.id;
+            input.value = currentBalance;
+            input.placeholder = 'Enter balance';
+            input.step = '0.01';
+            input.min = '0';
+
+            const currencyLabel = document.createElement('span');
+            currencyLabel.className = 'update-account-currency';
+            currencyLabel.textContent = account.currency;
+
+            inputGroup.appendChild(input);
+            inputGroup.appendChild(currencyLabel);
+            item.appendChild(nameEl);
+            item.appendChild(metaEl);
+            item.appendChild(inputGroup);
+            body.appendChild(item);
+        });
+    } catch (err) {
+        body.innerHTML = `<p style="color:#e74c3c;">Failed to load accounts: ${err.message}</p>`;
+        btn.disabled = true;
+    }
+}
+
+function closeUpdateBalancesModal() {
+    document.getElementById('updateBalancesModal').classList.remove('show');
+}
+
+async function saveRetirementBalances() {
+    const inputs = document.querySelectorAll('#updateBalancesBody .update-account-input');
+    const manualBalances = {};
+    let hasError = false;
+
+    inputs.forEach(input => {
+        const val = input.value.trim();
+        if (val === '') return; // Skip blank inputs
+        const num = parseFloat(val);
+        if (isNaN(num)) {
+            input.style.borderColor = '#e74c3c';
+            hasError = true;
+        } else {
+            input.style.borderColor = '';
+            manualBalances[input.dataset.accountId] = num;
+        }
+    });
+
+    if (hasError) return;
+    if (!Object.keys(manualBalances).length) {
+        closeUpdateBalancesModal();
+        return;
+    }
+
+    const btn = document.getElementById('saveUpdateBalancesBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    try {
+        const res = await fetch('/api/refresh_balances', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ manualBalances }),
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || 'Failed to save balances');
+        }
+
+        closeUpdateBalancesModal();
+        await loadRetirementDashboard();
+    } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Save Balances';
+        // Show error inline above footer
+        const body = document.getElementById('updateBalancesBody');
+        let errEl = document.getElementById('updateBalancesError');
+        if (!errEl) {
+            errEl = document.createElement('div');
+            errEl.id = 'updateBalancesError';
+            errEl.style.cssText = 'background:#fdf0f0;border-left:4px solid #e74c3c;padding:10px 14px;border-radius:4px;color:#c0392b;font-size:0.9rem;margin-bottom:16px;';
+            body.prepend(errEl);
+        }
+        errEl.textContent = err.message || 'Something went wrong. Please try again.';
+    }
+}
+
+// ─── Keyboard / overlay close for modals ───────────────────────────────────
+
+document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (document.getElementById('addAccountModal').classList.contains('show')) {
+        closeAddAccountModal();
+    }
+    if (document.getElementById('updateBalancesModal').classList.contains('show')) {
+        closeUpdateBalancesModal();
+    }
+});
+
+document.getElementById('addAccountModal').addEventListener('click', function (e) {
+    if (e.target === this) closeAddAccountModal();
+});
+
+document.getElementById('updateBalancesModal').addEventListener('click', function (e) {
+    if (e.target === this) closeUpdateBalancesModal();
+});
+
