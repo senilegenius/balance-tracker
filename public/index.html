@@ -210,11 +210,6 @@
             font-weight: 500;
         }
 
-        .account-name.old {
-            color: #95a5a6;
-            font-style: italic;
-        }
-
         .account-type {
             color: #7f8c8d;
             font-size: 0.9rem;
@@ -683,6 +678,131 @@
             color: white;
             border-color: transparent;
         }
+
+        /* ── Add Liquid Account modal ──────────────────────────────────────── */
+        .liq-modal {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .liq-modal.show { display: flex; }
+
+        .liq-modal-content {
+            background: white;
+            border-radius: 16px;
+            max-width: 560px;
+            width: 100%;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .liq-modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 24px;
+            border-radius: 16px 16px 0 0;
+            position: relative;
+        }
+        .liq-modal-header h2 { margin: 0; font-size: 1.4rem; }
+        .liq-modal-header p  { margin: 6px 0 0; opacity: 0.9; font-size: 0.9rem; }
+
+        .liq-modal-close {
+            position: absolute;
+            top: 20px; right: 20px;
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            font-size: 1.3rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+        .liq-modal-close:hover { background: rgba(255,255,255,0.3); }
+
+        .liq-modal-body {
+            padding: 24px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .liq-modal-footer {
+            padding: 20px 24px;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .liq-modal-btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .liq-modal-btn.cancel       { background: #f8f9fa; color: #2c3e50; }
+        .liq-modal-btn.cancel:hover { background: #e9ecef; }
+        .liq-modal-btn.save         { background: #667eea; color: white; }
+        .liq-modal-btn.save:hover   { background: #5568d3; }
+        .liq-modal-btn:disabled     { background: #95a5a6; cursor: not-allowed; opacity: 0.7; }
+
+        .liq-modal-error {
+            background: #fdf0f0;
+            border-left: 4px solid #e74c3c;
+            padding: 10px 14px;
+            border-radius: 4px;
+            color: #c0392b;
+            font-size: 0.9rem;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        .liq-form-field { margin-bottom: 20px; }
+        .liq-form-field label {
+            display: block;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 6px;
+            font-size: 0.9rem;
+        }
+        .liq-form-field input,
+        .liq-form-field select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-family: inherit;
+            color: #2c3e50;
+            background: white;
+            transition: border-color 0.2s;
+        }
+        .liq-form-field input:focus,
+        .liq-form-field select:focus { outline: none; border-color: #667eea; }
+        .liq-form-field input[type="number"] { font-family: monospace; }
+        .liq-form-field .field-hint {
+            margin-top: 4px;
+            font-size: 0.8rem;
+            color: #95a5a6;
+        }
+        .liq-form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
     </style>
 </head>
 <body>
@@ -733,6 +853,7 @@
             <div class="balances-panel-header">
                 <h2>Current Account Balances <span id="balancesDateNote" style="color:#7f8c8d;font-size:0.9rem;font-weight:normal;">Loading...</span></h2>
                 <div class="balances-panel-actions">
+                    <button class="btn-panel-action" id="addLiquidAccountBtn">➕ Add Manual Account</button>
                     <button class="btn-panel-action" id="refreshCashBtn">🔄 Refresh Cash Balances</button>
                 </div>
             </div>
@@ -774,6 +895,55 @@
                         Loading...
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Manual Account modal -->
+    <div class="liq-modal" id="addLiquidAccountModal">
+        <div class="liq-modal-content">
+            <div class="liq-modal-header">
+                <button class="liq-modal-close" id="closeLiqAddAccountBtn">×</button>
+                <h2>＋ Add Liquid Account</h2>
+                <p>Manually add an account not connected via Plaid</p>
+            </div>
+            <div class="liq-modal-body">
+                <div class="liq-modal-error" id="liqAddAccountError"></div>
+                <div class="liq-form-field">
+                    <label for="liqAddInstitution">Institution</label>
+                    <input type="text" id="liqAddInstitution" placeholder="e.g. TD Bank" autocomplete="organization">
+                </div>
+                <div class="liq-form-field">
+                    <label for="liqAddAccountName">Account Name</label>
+                    <input type="text" id="liqAddAccountName" placeholder="e.g. Everyday Chequing" autocomplete="off">
+                </div>
+                <div class="liq-form-row">
+                    <div class="liq-form-field">
+                        <label for="liqAddAccountType">Account Type</label>
+                        <select id="liqAddAccountType">
+                            <option value="checking" selected>Checking</option>
+                            <option value="savings">Savings</option>
+                            <option value="credit">Credit Card</option>
+                            <option value="loc">Line of Credit</option>
+                        </select>
+                    </div>
+                    <div class="liq-form-field">
+                        <label for="liqAddCurrency">Currency</label>
+                        <select id="liqAddCurrency">
+                            <option value="CAD">CAD</option>
+                            <option value="USD">USD</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="liq-form-field">
+                    <label for="liqAddInitialBalance">Initial Balance</label>
+                    <input type="number" id="liqAddInitialBalance" placeholder="Optional" step="0.01" min="0">
+                    <div class="field-hint">Leave blank to add with no balance history yet. For credit cards / lines of credit, enter a positive number — it will be stored as negative automatically.</div>
+                </div>
+            </div>
+            <div class="liq-modal-footer">
+                <button class="liq-modal-btn cancel" id="cancelLiqAddAccountBtn">Cancel</button>
+                <button class="liq-modal-btn save"   id="saveLiqAddAccountBtn">Save Account</button>
             </div>
         </div>
     </div>

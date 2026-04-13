@@ -422,11 +422,11 @@ app.get('/api/manual_accounts', async (req, res) => {
   }
 });
 
-// Create a new manual retirement account (no Plaid connection).
+// Create a new manual account (liquid or retirement — no Plaid connection).
 // Optionally records an initial balance snapshot for today.
 app.post('/api/accounts/manual', async (req, res) => {
   try {
-    const { institution_name, account_name, account_type, currency, initial_balance } = req.body;
+    const { institution_name, account_name, account_type, currency, initial_balance, account_category } = req.body;
 
     if (!institution_name || !account_name || !account_type || !currency) {
       return res.status(400).json({ error: 'institution_name, account_name, account_type, and currency are required' });
@@ -436,16 +436,28 @@ app.post('/api/accounts/manual', async (req, res) => {
       return res.status(400).json({ error: 'currency must be CAD or USD' });
     }
 
+    const validCategories = ['liquid', 'retirement'];
+    const category = account_category || 'retirement';
+    if (!validCategories.includes(category)) {
+      return res.status(400).json({ error: 'account_category must be liquid or retirement' });
+    }
+
+    // Liability types — balances stored as negative; excluded from cash totals
+    const liabilityTypes = ['credit', 'credit card', 'loc', 'line of credit'];
+    const is_liability = liabilityTypes.includes(account_type.trim().toLowerCase());
+
     const accountResult = await pool.query(`
       INSERT INTO accounts
         (institution_name, account_name, account_type, account_category, currency, is_liability, is_active)
-      VALUES ($1, $2, $3, 'retirement', $4, false, true)
+      VALUES ($1, $2, $3, $4, $5, $6, true)
       RETURNING id, account_name, institution_name, account_type
     `, [
       institution_name.trim(),
       account_name.trim(),
       account_type.trim().toLowerCase(),
+      category,
       currency,
+      is_liability,
     ]);
 
     const account = accountResult.rows[0];
@@ -459,11 +471,14 @@ app.post('/api/accounts/manual', async (req, res) => {
       const rate = rateResult.rows.length > 0 ? parseFloat(rateResult.rows[0].rate) : null;
       const today = new Date().toISOString().split('T')[0];
 
+      // Liabilities are stored as negative values
+      const balanceToStore = is_liability ? -Math.abs(parsedBalance) : parsedBalance;
+
       await pool.query(`
         INSERT INTO balance_snapshots (account_id, balance, date, usd_to_cad_rate)
         VALUES ($1, $2, $3, $4)
         ON CONFLICT (account_id, date) DO UPDATE SET balance = $2, usd_to_cad_rate = $4
-      `, [account.id, parsedBalance, today, rate]);
+      `, [account.id, balanceToStore, today, rate]);
     }
 
     res.json({ success: true, account });
