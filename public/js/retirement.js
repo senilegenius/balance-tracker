@@ -476,6 +476,11 @@ async function saveNewAccount() {
 // ─── Modal event listeners (called on DOMContentLoaded) ────────────────────
 
 function setupModalEventListeners() {
+    // Dark mode toggle
+    document.getElementById('darkModeToggleBtn').addEventListener('click', function () {
+        if (typeof toggleDarkMode === 'function') toggleDarkMode();
+    });
+
     // Panel action buttons
     document.getElementById('addAccountBtn').addEventListener('click', showAddAccountModal);
 

@@ -803,11 +803,127 @@
             grid-template-columns: 1fr 1fr;
             gap: 16px;
         }
+
+        /* ── Dark mode toggle button ───────────────────────────────────────── */
+        .btn-dark-mode {
+            background: none;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            color: #7f8c8d;
+            transition: background 0.2s, border-color 0.2s;
+            line-height: 1;
+        }
+        .btn-dark-mode:hover { background: #f0f0f0; }
+
+        /* ── Dark mode overrides ───────────────────────────────────────────── */
+        body.dark { background: #1a1d23; }
+        body.dark h1,
+        body.dark h2 { color: #e8eaf0; }
+        body.dark .card:not(.primary) {
+            background: #252930;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        body.dark .card:not(.primary) .card-label { color: #9aa0b0; }
+        body.dark .card:not(.primary) .card-value { color: #e8eaf0; }
+        body.dark .balances-panel,
+        body.dark .chart-panel {
+            background: #252930;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        body.dark .institution { border-color: #3a3f50; }
+        body.dark .institution-header { background: #2e3340; color: #e8eaf0; }
+        body.dark .institution-header:hover { background: #363c4a; }
+        body.dark .account-row { border-bottom-color: #2e3340; }
+        body.dark .account-row:hover { background: #2e3340; }
+        body.dark .account-name { color: #e8eaf0; }
+        body.dark .account-type { color: #9aa0b0; }
+        body.dark .liability-note {
+            background: #3a3520;
+            border-color: #c59400;
+            color: #d4a900;
+        }
+        body.dark .date-range-btn {
+            background: #2e3340;
+            border-color: #3a3f50;
+            color: #e8eaf0;
+        }
+        body.dark .date-range-btn:hover { background: #363c4a; }
+        body.dark .date-range-btn.active {
+            background: #667eea;
+            border-color: #667eea;
+            color: white;
+        }
+        body.dark .side-panel {
+            background: #252930;
+            box-shadow: -4px 0 20px rgba(0,0,0,0.4);
+        }
+        body.dark .history-chart-section h3,
+        body.dark .history-stats-section h3 { color: #e8eaf0; }
+        body.dark .history-chart-container,
+        body.dark .history-stats-section { background: #2e3340; }
+        body.dark .stats-row { color: #e8eaf0; }
+        body.dark .tab-link {
+            background: #252930;
+            border-color: #3a3f50;
+            color: #9aa0b0;
+            box-shadow: none;
+        }
+        body.dark .tab-link:hover { background: #363c4a; color: #e8eaf0; }
+        body.dark .btn-panel-action {
+            background: #252930;
+            border-color: #3a3f50;
+            color: #e8eaf0;
+        }
+        body.dark .btn-panel-action:hover { background: #363c4a; }
+        body.dark .btn-dark-mode { border-color: #3a3f50; color: #9aa0b0; }
+        body.dark .btn-dark-mode:hover { background: #2e3340; }
+        /* liq-modal dark mode */
+        body.dark .liq-modal-content { background: #252930; }
+        body.dark .liq-modal-footer { border-top-color: #3a3f50; }
+        body.dark .liq-modal-btn.cancel { background: #2e3340; color: #e8eaf0; }
+        body.dark .liq-modal-btn.cancel:hover { background: #363c4a; }
+        body.dark .liq-form-field label { color: #e8eaf0; }
+        body.dark .liq-form-field input,
+        body.dark .liq-form-field select {
+            background: #2e3340;
+            border-color: #3a3f50;
+            color: #e8eaf0;
+        }
+        body.dark .liq-form-field .field-hint { color: #7a8090; }
+        body.dark .liq-modal-error {
+            background: #3a2020;
+            border-color: #e74c3c;
+            color: #f17070;
+        }
+        /* refresh-modal dark mode */
+        body.dark .refresh-balance-content { background: #252930 !important; }
+        body.dark .refresh-balance-body    { background: #252930 !important; }
+        body.dark .refresh-account-name    { color: #e8eaf0 !important; }
+        body.dark .refresh-account-current { color: #9aa0b0 !important; }
+        body.dark .refresh-account-input {
+            background: #2e3340 !important;
+            border-color: #3a3f50 !important;
+            color: #e8eaf0 !important;
+        }
+        body.dark .refresh-account-currency { color: #9aa0b0 !important; }
+        body.dark .refresh-balance-footer {
+            border-top-color: #3a3f50 !important;
+            background: #252930 !important;
+        }
+        body.dark .refresh-balance-btn.cancel {
+            background: #2e3340 !important;
+            color: #e8eaf0 !important;
+        }
+        body.dark .refresh-account-item { border-bottom-color: #3a3f50 !important; }
     </style>
 </head>
 <body>
+    <script src="/js/dark-mode.js"></script>
     <div class="container">
-        <h1>💰 Financial Dashboard</h1>
+        <h1>💰 Financial Dashboard <button class="btn-dark-mode" id="darkModeToggleBtn" title="Toggle dark mode">🌙</button></h1>
 
         <div class="page-tabs-row">
             <div class="tabs-left">
