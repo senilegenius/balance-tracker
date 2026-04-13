@@ -166,6 +166,7 @@
     // ─── Module state ───────────────────────────────────────────────────────
 
     let _triggerBtn   = null;   // button that started the refresh
+    let _triggerLabel = null;   // original label of that button, for restore
     let _reloadFn     = null;   // page-specific data reload function
     let _plaidPromise = null;   // background Plaid refresh promise
     let _plaidResult  = null;   // resolved Plaid result (stored for save step)
@@ -184,11 +185,11 @@
      * @param {Function}    reloadFn    Called after a successful save.
      */
     window.triggerRefresh = async function (category, triggerBtn, reloadFn) {
-        _triggerBtn  = triggerBtn;
-        _reloadFn    = reloadFn;
-        _plaidResult = null;
+        _triggerBtn   = triggerBtn;
+        _triggerLabel = triggerBtn.textContent;
+        _reloadFn     = reloadFn;
+        _plaidResult  = null;
 
-        const originalLabel = triggerBtn.textContent;
         triggerBtn.disabled = true;
         triggerBtn.textContent = '⏳ Refreshing...';
 
@@ -328,7 +329,7 @@
                 .catch(err => console.error('Plaid refresh error:', err));
         }
 
-        if (_triggerBtn) _restoreButton(_triggerBtn._originalLabel ?? '🔄 Refresh');
+        if (_triggerBtn) _restoreButton(_triggerLabel ?? '🔄 Refresh');
     }
 
     // ─── Save handler ───────────────────────────────────────────────────────
@@ -392,7 +393,7 @@
             saveBtn.textContent = 'Save Balances';
         } finally {
             cancelBtn.disabled = false;
-            if (_triggerBtn) _restoreButton(_triggerBtn._originalLabel ?? '🔄 Refresh');
+            if (_triggerBtn) _restoreButton(_triggerLabel ?? '🔄 Refresh');
         }
     };
 
