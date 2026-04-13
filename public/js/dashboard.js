@@ -24,6 +24,11 @@ function setupEventListeners() {
         triggerRefresh('liquid', this, loadDashboard);
     });
 
+    // Dark mode toggle
+    document.getElementById('darkModeToggleBtn').addEventListener('click', function () {
+        if (typeof toggleDarkMode === 'function') toggleDarkMode();
+    });
+
     // Add Manual Account modal
     document.getElementById('addLiquidAccountBtn').addEventListener('click', openAddLiquidAccountModal);
     document.getElementById('closeLiqAddAccountBtn').addEventListener('click', closeAddLiquidAccountModal);
