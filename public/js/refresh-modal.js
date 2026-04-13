@@ -156,7 +156,7 @@
         // Wire up close/cancel buttons and Escape key
         document.getElementById('closeRefreshModalBtn').addEventListener('click', _cancelModal);
         document.getElementById('cancelRefreshModalBtn').addEventListener('click', _cancelModal);
-        document.getElementById('saveRefreshModalBtn').addEventListener('click', saveRefreshBalances);
+        document.getElementById('saveRefreshModalBtn').addEventListener('click', () => saveRefreshBalances());
         modal.addEventListener('click', e => { if (e.target === modal) _cancelModal(); });
         document.addEventListener('keydown', e => {
             if (e.key === 'Escape' && modal.classList.contains('show')) _cancelModal();

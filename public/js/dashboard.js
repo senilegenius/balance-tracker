@@ -24,6 +24,15 @@ function setupEventListeners() {
         triggerRefresh('liquid', this, loadDashboard);
     });
 
+    // Add Manual Account modal
+    document.getElementById('addLiquidAccountBtn').addEventListener('click', openAddLiquidAccountModal);
+    document.getElementById('closeLiqAddAccountBtn').addEventListener('click', closeAddLiquidAccountModal);
+    document.getElementById('cancelLiqAddAccountBtn').addEventListener('click', closeAddLiquidAccountModal);
+    document.getElementById('saveLiqAddAccountBtn').addEventListener('click', saveAddLiquidAccount);
+    document.getElementById('addLiquidAccountModal').addEventListener('click', function (e) {
+        if (e.target === this) closeAddLiquidAccountModal();
+    });
+
     // Date range buttons
     document.querySelectorAll('.date-range-btn').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -46,10 +55,93 @@ function setupEventListeners() {
     // Close side panel button
     document.getElementById('closeSidePanelBtn').addEventListener('click', closeSidePanel);
 
-    // Escape key to close side panel (refresh modal handles its own Escape key)
+    // Escape key — close add-account modal first, then side panel
     document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') closeSidePanel();
+        if (e.key === 'Escape') {
+            if (document.getElementById('addLiquidAccountModal').classList.contains('show')) {
+                closeAddLiquidAccountModal();
+            } else {
+                closeSidePanel();
+            }
+        }
     });
+}
+
+// ─── Add Liquid Account modal ───────────────────────────────────────────────
+
+function openAddLiquidAccountModal() {
+    document.getElementById('liqAddInstitution').value    = '';
+    document.getElementById('liqAddAccountName').value    = '';
+    document.getElementById('liqAddAccountType').value    = 'checking';
+    document.getElementById('liqAddCurrency').value       = 'CAD';
+    document.getElementById('liqAddInitialBalance').value = '';
+    _setLiqAddError('');
+
+    const btn = document.getElementById('saveLiqAddAccountBtn');
+    btn.disabled    = false;
+    btn.textContent = 'Save Account';
+
+    document.getElementById('addLiquidAccountModal').classList.add('show');
+    document.getElementById('liqAddInstitution').focus();
+}
+
+function closeAddLiquidAccountModal() {
+    document.getElementById('addLiquidAccountModal').classList.remove('show');
+}
+
+function _setLiqAddError(msg) {
+    const el = document.getElementById('liqAddAccountError');
+    el.textContent   = msg;
+    el.style.display = msg ? 'block' : 'none';
+}
+
+async function saveAddLiquidAccount() {
+    const institution_name  = document.getElementById('liqAddInstitution').value.trim();
+    const account_name      = document.getElementById('liqAddAccountName').value.trim();
+    const account_type      = document.getElementById('liqAddAccountType').value;
+    const currency          = document.getElementById('liqAddCurrency').value;
+    const initialBalanceRaw = document.getElementById('liqAddInitialBalance').value.trim();
+
+    if (!institution_name) { _setLiqAddError('Institution name is required.'); return; }
+    if (!account_name)     { _setLiqAddError('Account name is required.'); return; }
+
+    const initial_balance = initialBalanceRaw !== '' ? parseFloat(initialBalanceRaw) : undefined;
+    if (initialBalanceRaw !== '' && isNaN(initial_balance)) {
+        _setLiqAddError('Initial balance must be a valid number.');
+        return;
+    }
+
+    const btn = document.getElementById('saveLiqAddAccountBtn');
+    btn.disabled    = true;
+    btn.textContent = 'Saving…';
+    _setLiqAddError('');
+
+    try {
+        const res = await fetch('/api/accounts/manual', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                institution_name,
+                account_name,
+                account_type,
+                currency,
+                initial_balance,
+                account_category: 'liquid',
+            }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to save account');
+        }
+
+        closeAddLiquidAccountModal();
+        await loadDashboard();
+    } catch (err) {
+        _setLiqAddError(err.message || 'Something went wrong. Please try again.');
+        btn.disabled    = false;
+        btn.textContent = 'Save Account';
+    }
 }
 
 async function loadDashboard() {
@@ -106,9 +198,6 @@ function updateSummaryCards(data) {
 }
 
 function updateAccountBalances(data) {
-    // Define old account IDs that need warning labels
-    const oldAccountIds = [5, 6, 7, 8, 14, 16];
-
     // Group accounts by type and currency
     const grouped = {};
     data.accounts.forEach(account => {
@@ -133,19 +222,9 @@ function updateAccountBalances(data) {
         grouped[sectionName].push(account);
     });
 
-    // Sort accounts within each section: new first, old last
+    // Sort accounts within each section by ID (server order)
     Object.keys(grouped).forEach(sectionName => {
-        grouped[sectionName].sort((a, b) => {
-            const aIsOld = oldAccountIds.includes(a.id);
-            const bIsOld = oldAccountIds.includes(b.id);
-
-            // Old accounts go to end
-            if (aIsOld && !bIsOld) return 1;
-            if (!aIsOld && bIsOld) return -1;
-
-            // Within same group (both old or both new), maintain original order by ID
-            return a.id - b.id;
-        });
+        grouped[sectionName].sort((a, b) => a.id - b.id);
     });
 
     const balancesPanel = document.querySelector('.balances-panel');
@@ -203,9 +282,8 @@ function updateAccountBalances(data) {
             accountRow.className = 'account-row';
             accountRow.onclick = function() { showHistory(account.id, account.account_name, account.currency, account.account_type); };
 
-            const isOld = oldAccountIds.includes(account.id);
-            const displayName = isOld ? '⚠️ Old - ' + account.account_name : account.account_name;
-            const nameClass = isOld ? 'account-name old' : 'account-name';
+            const displayName = account.account_name;
+            const nameClass = 'account-name';
 
             const balance = parseFloat(account.balance);
             const balanceClass = balance < 0 ? 'negative' : (balance > 0 ? 'positive' : '');
