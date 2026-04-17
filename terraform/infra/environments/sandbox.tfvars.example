@@ -3,9 +3,10 @@
 
 # ── Deployment target ─────────────────────────────────────────────────────────
 
-environment     = "sandbox"
-aws_region      = "us-west-2"
-target_role_arn = "arn:aws:iam::<sandbox-account-id>:role/<role-name>"
+environment          = "sandbox"
+aws_region           = "us-west-2"
+target_role_arn      = "arn:aws:iam::<sandbox-account-id>:role/<role-name>"
+ecr_repository_url   = "<mgmt-account-id>.dkr.ecr.us-west-2.amazonaws.com/balance-tracker"
 
 # ── Application config ────────────────────────────────────────────────────────
 
