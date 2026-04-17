@@ -1,5 +1,11 @@
 locals {
   allowed_origin = var.allowed_origin != null ? var.allowed_origin : "https://${aws_apigatewayv2_api.app.id}.execute-api.${var.aws_region}.amazonaws.com"
+
+  # Derive the ECR repository ARN from the repository URL.
+  # URL format: {account_id}.dkr.ecr.{region}.amazonaws.com/{repo_name}
+  ecr_account_id     = split(".", var.ecr_repository_url)[0]
+  ecr_repo_name      = split("/", var.ecr_repository_url)[1]
+  ecr_repository_arn = "arn:aws:ecr:${var.aws_region}:${local.ecr_account_id}:repository/${local.ecr_repo_name}"
 }
 
 resource "aws_iam_role" "lambda" {
@@ -18,6 +24,25 @@ resource "aws_iam_role" "lambda" {
 resource "aws_iam_role_policy_attachment" "lambda_basic" {
   role       = aws_iam_role.lambda.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "lambda_ecr_pull" {
+  name = "ecr-pull"
+  role = aws_iam_role.lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "ECRPull"
+      Effect = "Allow"
+      Action = [
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchGetImage",
+        "ecr:BatchCheckLayerAvailability",
+      ]
+      Resource = local.ecr_repository_arn
+    }]
+  })
 }
 
 resource "aws_lambda_function" "app" {
