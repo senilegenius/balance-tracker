@@ -13,17 +13,17 @@ jobs:
     runs-on: ubuntu-latest
     environment: sandbox
     permissions:
-      id-token: write  # Required for OIDC authentication to AWS
+      id-token: write
       contents: read
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials for ECR push
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ECR_PUSH_ROLE_ARN }}
           aws-region: us-west-2
 
       - name: Login to Amazon ECR
@@ -41,15 +41,19 @@ jobs:
             .
           docker push $ECR_REGISTRY/balance-tracker:$IMAGE_TAG
           docker push $ECR_REGISTRY/balance-tracker:latest
+          echo "IMAGE_URI=$ECR_REGISTRY/balance-tracker:$IMAGE_TAG" >> "$GITHUB_ENV"
+
+      - name: Configure AWS credentials for Lambda deploy
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-west-2
 
       - name: Deploy to Lambda
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
         run: |
           aws lambda update-function-code \
             --function-name balance-tracker-sandbox \
-            --image-uri $ECR_REGISTRY/balance-tracker:$IMAGE_TAG
+            --image-uri "$IMAGE_URI"
           aws lambda wait function-updated \
             --function-name balance-tracker-sandbox
 
@@ -59,17 +63,17 @@ jobs:
     runs-on: ubuntu-latest
     environment: prd
     permissions:
-      id-token: write  # Required for OIDC authentication to AWS
+      id-token: write
       contents: read
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials for ECR push
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ECR_PUSH_ROLE_ARN }}
           aws-region: us-west-2
 
       - name: Login to Amazon ECR
@@ -87,14 +91,18 @@ jobs:
             .
           docker push $ECR_REGISTRY/balance-tracker:$IMAGE_TAG
           docker push $ECR_REGISTRY/balance-tracker:latest
+          echo "IMAGE_URI=$ECR_REGISTRY/balance-tracker:$IMAGE_TAG" >> "$GITHUB_ENV"
+
+      - name: Configure AWS credentials for Lambda deploy
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-west-2
 
       - name: Deploy to Lambda
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.ref_name }}
         run: |
           aws lambda update-function-code \
             --function-name balance-tracker-prd \
-            --image-uri $ECR_REGISTRY/balance-tracker:$IMAGE_TAG
+            --image-uri "$IMAGE_URI"
           aws lambda wait function-updated \
             --function-name balance-tracker-prd

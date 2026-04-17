@@ -5,7 +5,7 @@ output "api_gateway_url" {
 
 output "ecr_repository_url" {
   description = "ECR repository URL for pushing container images"
-  value       = data.aws_ecr_repository.app.repository_url
+  value       = var.ecr_repository_url
 }
 
 output "lambda_function_name" {

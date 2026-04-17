@@ -78,3 +78,17 @@ Requires `.env` with: `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV`, `DATABASE_
 **Milestone 2:** COMPLETED: Database backup and restore is handled by `db_backup.sh`. Supports backing up localhost or production, and restoring production to localhost (with automatic pre-restore local snapshot). Credentials sourced from env files. Backups auto-pruned after 30 days. Sample data loadable via `npm run db:seed`. RLS enabled on Supabase via `db/enable_rls.sql`.
 
 **Milestone 3:** Deploy to AWS. I don't want to click to set up things in AWS except for in my sandbox where I might want to experiement. For all other environments I want to use Terraform to manage the deployments to AWS. I want to have at least one pre-production environment for my application and also one or more pre-production environments for my IaC.
+
+## Backlog
+
+**Pending promotion to production:**
+- Run `node migrations/010_add_account_category.js` against the production DB before or immediately after deploying the retirement feature. The migration is idempotent and safe to re-run.
+
+**Manual retirement account form:**
+- No UI exists yet for adding a manual (non-Plaid) retirement account. Currently requires using `npm run db:add-snapshot` directly. A form on `connect.html` or a dedicated page should include: account name, institution, account type (401k/IRA/RRSP/etc.), currency (CAD/USD), and category toggle (Liquid/Retirement).
+
+**Tests:**
+- No test framework is configured. First priorities when adding tests:
+  - Unit tests for retirement subtype auto-classification logic (server.js `RETIREMENT_SUBTYPES` set)
+  - Unit tests for the trend data carry-forward SQL CTE (or an integration test against a test DB)
+  - Auth middleware / session expiry behaviour
