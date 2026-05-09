@@ -1,7 +1,7 @@
 # ── Deployment target ────────────────────────────────────────────────────────
 
 variable "target_role_arn" {
-  description = "IAM role ARN to assume in the target AWS account (sandbox or prd)"
+  description = "IAM role ARN to assume in the sandbox AWS account"
   type        = string
   sensitive   = true
 }
@@ -9,18 +9,12 @@ variable "target_role_arn" {
 variable "aws_region" {
   description = "AWS region to deploy into"
   type        = string
-  default     = "us-east-1"
+  default     = "us-west-2"
 }
 
-variable "environment" {
-  description = "Deployment environment name (sandbox or prd)"
+variable "ecr_repository_url" {
+  description = "ECR repository URL for the app image (from the central management account)"
   type        = string
-}
-
-variable "app_name" {
-  description = "Application name used as a prefix for all resource names"
-  type        = string
-  default     = "balance-tracker"
 }
 
 # ── Application config ────────────────────────────────────────────────────────
@@ -83,7 +77,7 @@ variable "db_encryption_key" {
 # ── Custom domain (optional) ──────────────────────────────────────────────────
 
 variable "custom_domain" {
-  description = "Custom domain for the app (e.g. yourdomain.com). When set, creates an ACM cert, API Gateway custom domain, and Route53 DNS record."
+  description = "Custom domain for the app. Typically left unset for sandbox."
   type        = string
   default     = null
 }
