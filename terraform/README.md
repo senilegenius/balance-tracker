@@ -13,6 +13,19 @@ EventBridge    → Lambda (scheduled Plaid balance refreshes)
 
 Secrets are passed as Lambda environment variables. No secrets are committed to git — use the `*.example` files as templates.
 
+## Module layout
+
+```
+terraform/
+├── bootstrap/        # One-time setup: S3 state bucket + DynamoDB lock table
+├── modules/
+│   └── app/          # All resource definitions: Lambda, API Gateway, IAM, scheduler
+├── sandbox/          # Thin wrapper for sandbox account
+└── prd/              # Thin wrapper for prd account
+```
+
+Each environment directory has its own backend config and is initialized independently — no `-reconfigure` needed when switching between environments.
+
 ## Prerequisites
 
 - [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.0
@@ -43,46 +56,44 @@ This only needs to be run once. The bucket and table persist permanently.
 ## Step 2 — Deploy infrastructure to an environment
 
 ```bash
-cd terraform/infra
+cd terraform/sandbox   # or terraform/prd
 
-# 1. Create your backend config from the example (contains your state bucket name)
-cp backends/sandbox.hcl.example backends/sandbox.hcl
+# 1. Create your backend config from the example
+cp backend.hcl.example backend.hcl
 # Fill in: bucket (your state bucket name from Step 1)
 
-# 2. Create your secrets + personal config (never committed)
+# 2. Create your config + secrets file
 cp terraform.tfvars.example terraform.tfvars
-# Fill in: target_role_arn, github_repo, allowed_origin, and all app secrets
+# Fill in: target_role_arn, ecr_repository_url, and all app secrets
 
-# 3. Init pointing at your backend
+# 3. Init (once per directory — no -reconfigure needed when switching environments)
 export AWS_PROFILE=<your-management-account-profile>
-terraform init -backend-config=backends/sandbox.hcl
+terraform init -backend-config=backend.hcl
 
-# 4. Apply
-terraform apply -var-file=environments/sandbox.tfvars
+# 4. Plan, then apply
+terraform plan
+terraform apply
 ```
-
-After the first apply, copy the `api_gateway_url` output into `terraform.tfvars` as `allowed_origin` (no trailing slash), then re-apply to update the Lambda's CORS config.
-
-To deploy to prd, repeat using `backends/prd.hcl` and `environments/prd.tfvars`.
 
 ---
 
 ## Step 3 — Set up GitHub Actions
 
 1. Create a `sandbox` environment in your GitHub repo (Settings → Environments)
-2. Add a secret named `AWS_ROLE_ARN` with the value of the `github_actions_role_arn` Terraform output
+2. Add secrets `AWS_ECR_PUSH_ROLE_ARN` and `AWS_DEPLOY_ROLE_ARN` from infrabase Terraform outputs
 3. Push to `main` — the workflow builds the Lambda image, pushes to ECR, and deploys automatically
 
-For prd, repeat with a `prd` environment and the prd role ARN once prd infrastructure is deployed.
+For prd, repeat with a `prd` environment once prd infrastructure is deployed.
 
 ---
 
 ## Tear down
 
 ```bash
-cd terraform/infra
+cd terraform/sandbox   # or terraform/prd
 export AWS_PROFILE=<your-management-account-profile>
-terraform destroy -var-file=environments/sandbox.tfvars
+terraform plan  # review what will be destroyed
+terraform destroy
 ```
 
 State is preserved in S3 even after destroy, so re-applying later works cleanly.
@@ -97,25 +108,21 @@ bootstrap/
   variables.tf
   terraform.tfvars.example # Template — copy to terraform.tfvars and fill in
 
-infra/
-  main.tf                  # Provider config and S3 backend
+modules/app/
+  providers.tf             # Provider requirements including aws.dns alias
   variables.tf             # All input variables
-  outputs.tf               # API Gateway URL, ECR URL, role ARN, function name
-  ecr.tf                   # ECR repository and lifecycle policy
+  outputs.tf               # API Gateway URL, ECR URL, function name
   lambda.tf                # Lambda function and IAM execution role
   apigateway.tf            # API Gateway HTTP API
+  custom_domain.tf         # ACM cert, Route53 records, API GW custom domain (optional)
   scheduler.tf             # EventBridge Scheduler for Plaid refreshes
-  iam_github.tf            # GitHub Actions OIDC provider and deploy role
 
-  backends/
-    sandbox.hcl.example    # Template — copy to sandbox.hcl and fill in
-    prd.hcl.example        # Template — copy to prd.hcl and fill in
-    *.hcl                  # Your actual backend configs (gitignored)
-
-  environments/
-    sandbox.tfvars         # Non-sensitive sandbox config (committed)
-    prd.tfvars             # Non-sensitive prd config (committed)
-
-  terraform.tfvars.example # Template for secrets + personal values
-  terraform.tfvars         # Your actual secrets (gitignored)
+sandbox/                   # prd/ is identical in structure
+  main.tf                  # Provider config + module call
+  variables.tf             # Input variables (passed through to module)
+  outputs.tf               # Pass-through outputs from module
+  backend.hcl.example      # Template — copy to backend.hcl and fill in
+  backend.hcl              # Your actual backend config (gitignored)
+  terraform.tfvars.example # Template — copy to terraform.tfvars and fill in
+  terraform.tfvars         # Your actual config + secrets (gitignored)
 ```

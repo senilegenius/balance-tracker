@@ -1,25 +1,24 @@
-# Copy to sandbox.tfvars and fill in real values.
-# sandbox.tfvars is gitignored — never commit it.
+# Copy to terraform.tfvars and fill in real values.
+# terraform.tfvars is gitignored — never commit it.
 
 # ── Deployment target ─────────────────────────────────────────────────────────
 
-environment          = "sandbox"
-aws_region           = "us-west-2"
-target_role_arn      = "arn:aws:iam::<sandbox-account-id>:role/<role-name>"
-ecr_repository_url   = "<mgmt-account-id>.dkr.ecr.us-west-2.amazonaws.com/balance-tracker"
+target_role_arn    = "arn:aws:iam::<prd-account-id>:role/<role-name>"
+aws_region         = "us-west-2"
+ecr_repository_url = "<mgmt-account-id>.dkr.ecr.us-west-2.amazonaws.com/balance-tracker"
 
 # ── Application config ────────────────────────────────────────────────────────
 
-plaid_env        = "sandbox"
-node_env         = "development"
+plaid_env        = "production"
+node_env         = "production"
 refresh_schedule = "cron(0 12,18,0 * * ? *)"
 
-# CORS origin — leave commented out for sandbox; Terraform uses the API Gateway
-# URL automatically.
+# CORS origin — set this to your custom domain once DNS is pointed at AWS.
 # allowed_origin = "https://<your-domain>"
 
 # ── Custom domain (optional) ──────────────────────────────────────────────────
-# Typically left unset for sandbox. Uncomment to enable.
+# Uncomment to enable ACM cert + API Gateway custom domain + Route53 DNS record.
+# Route53 zone must be in the management account.
 # custom_domain   = "<your-domain>"
 # route53_zone_id = "<route53-hosted-zone-id>"
 
