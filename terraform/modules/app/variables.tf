@@ -43,7 +43,7 @@ variable "allowed_origin" {
 variable "refresh_schedule" {
   description = "EventBridge Scheduler cron expression for Plaid balance refreshes (UTC)"
   type        = string
-  default     = "cron(0 12,18,0 * * ? *)"
+  default     = "cron(30 12 * * ? *)"
 }
 
 # ── Secrets ───────────────────────────────────────────────────────────────────
