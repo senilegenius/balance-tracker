@@ -501,9 +501,11 @@ app.get('/api/latest_balances', async (req, res) => {
         a.account_mask,
         a.is_liability,
         b.balance,
-        b.date
+        b.date,
+        er.rate AS usd_to_cad_rate
       FROM accounts a
       LEFT JOIN balance_snapshots b ON a.id = b.account_id
+      LEFT JOIN exchange_rates er ON er.from_currency = 'USD' AND er.to_currency = 'CAD'
       WHERE a.is_active = true
         AND a.account_category = 'liquid'
         AND b.balance IS NOT NULL
