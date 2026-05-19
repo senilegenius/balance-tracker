@@ -287,13 +287,24 @@ function updateAccountBalances(data) {
             accountRow.className = 'account-row';
             accountRow.onclick = function() { showHistory(account.id, account.account_name, account.currency, account.account_type); };
 
-            const displayName = account.account_name;
-            const nameClass = 'account-name';
-
             const balance = parseFloat(account.balance);
+            const rate = account.usd_to_cad_rate ? parseFloat(account.usd_to_cad_rate) : 1;
+            const balanceCad = account.currency === 'USD' ? balance * rate : balance;
             const balanceClass = balance < 0 ? 'negative' : (balance > 0 ? 'positive' : '');
 
-            accountRow.innerHTML = '<div><div class="' + nameClass + '">' + displayName + '</div><div class="account-type">' + account.institution_name + (account.account_mask ? ' • ' + account.account_mask : '') + '</div></div><div></div><div class="account-balance ' + balanceClass + '">' + formatCurrency(Math.abs(balance)) + '</div><div class="view-history">View History →</div>';
+            const usdNote = account.currency === 'USD'
+                ? `<span class="currency-note">${formatNative(balance, 'USD')} USD</span>`
+                : '';
+
+            accountRow.innerHTML = `
+                <div>
+                    <div class="account-name">${account.account_name}</div>
+                    <div class="account-type">${account.institution_name}${account.account_mask ? ' • ' + account.account_mask : ''}</div>
+                </div>
+                <div class="account-usd-note">${usdNote}</div>
+                <div class="account-balance ${balanceClass}">${formatCurrency(Math.abs(balanceCad))}</div>
+                <div class="view-history">View History →</div>
+            `;
 
             accountsDiv.appendChild(accountRow);
         });
@@ -510,6 +521,14 @@ function formatCurrency(value) {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
     });
+}
+
+function formatNative(amount, currency) {
+    return new Intl.NumberFormat('en-CA', {
+        style: 'currency',
+        currency: currency,
+        minimumFractionDigits: 2,
+    }).format(amount);
 }
 
 function formatDate(dateString) {
