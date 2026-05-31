@@ -1,0 +1,46 @@
+name: Scheduled npm audit
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Every Monday at 9am UTC
+  workflow_dispatch:
+
+jobs:
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run npm audit
+        id: audit
+        run: npm audit --audit-level=moderate 2>&1 | tee audit-output.txt
+        continue-on-error: true
+
+      - name: Open issue if vulnerabilities found
+        if: steps.audit.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BODY="## npm audit found vulnerabilities
+
+          \`\`\`
+          $(cat audit-output.txt)
+          \`\`\`
+
+          Run \`npm audit\` locally for details, or \`npm audit fix\` to attempt auto-remediation."
+          gh issue create \
+            --title "npm audit: vulnerabilities found ($(date +%Y-%m-%d))" \
+            --body "$BODY" \
+            --label "security"
