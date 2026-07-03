@@ -21,7 +21,8 @@
     "db:add-bulk": "psql balance_tracker < db/add_snapshot.sql",
     "db:import-csv": "node db/import_csv.js",
     "create-user": "node db/create_user.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "pretest": "sh scripts/setup-test-db.sh",
+    "test": "node --test --test-concurrency=1 --test-force-exit 'test/*.test.js'",
     "migrate:account-19-to-34": "node migrations/007_migrate_account_19_to_34.js",
     "migrate:account-11-to-35": "node migrations/008_migrate_account_11_to_35.js",
     "db:migrate-category": "node migrations/010_add_account_category.js"
@@ -42,5 +43,8 @@
     "helmet": "^8.2.0",
     "pg": "^8.21.0",
     "plaid": "^42.2.0"
+  },
+  "devDependencies": {
+    "supertest": "^7.2.2"
   }
 }
