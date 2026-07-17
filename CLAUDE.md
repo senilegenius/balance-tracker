@@ -90,8 +90,7 @@ Requires `.env` with: `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV`, `DATABASE_
 - No UI exists yet for adding a manual (non-Plaid) retirement account. Currently requires using `npm run db:add-snapshot` directly. A form on `connect.html` or a dedicated page should include: account name, institution, account type (401k/IRA/RRSP/etc.), currency (CAD/USD), and category toggle (Liquid/Retirement).
 
 **Tests:**
-- Integration test suite exists in `test/` (security + data accuracy, run via `npm test`). Remaining priorities:
+- Integration test suite exists in `test/` (security + data accuracy, run via `npm test`). CI runs the suite on every PR and before every deploy (`.github/workflows/deploy.yml` `test` job, Postgres 17 service container). Remaining priorities:
   - Unit tests for retirement subtype auto-classification (`RETIREMENT_SUBTYPES` in server.js) — requires extracting the logic or mocking Plaid's token exchange
   - Plaid refresh flow (`refreshBalances` Plaid path) with a mocked Plaid client, including `ITEM_LOGIN_REQUIRED` handling
   - Browser/UI tests with Playwright (login flow, dashboard renders totals, granularity toggle)
-  - Run tests in CI on PRs (GitHub Actions + Postgres service container)
