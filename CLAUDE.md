@@ -30,7 +30,9 @@ gh pr create ...
 - `./db_backup.sh backup_prd` — Backup production database to `backups/` (uses `.env.production`)
 - `./db_backup.sh prd_to_localhost` — Snapshot local DB, then pull and restore production data locally
 
-No test framework is configured. No linter or formatter is configured.
+- `npm test` — Run the test suite (Node's built-in test runner + supertest). Automatically creates/resets the `balance_tracker_test` database first (`scripts/setup-test-db.sh`); requires local Postgres. Tests never touch the real database: `test/helpers/setup.js` pins `DATABASE_URL` to the test DB before `server.js` loads and refuses to run against a DB whose name doesn't contain "test".
+
+No linter or formatter is configured.
 
 ## Architecture
 
@@ -88,7 +90,8 @@ Requires `.env` with: `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV`, `DATABASE_
 - No UI exists yet for adding a manual (non-Plaid) retirement account. Currently requires using `npm run db:add-snapshot` directly. A form on `connect.html` or a dedicated page should include: account name, institution, account type (401k/IRA/RRSP/etc.), currency (CAD/USD), and category toggle (Liquid/Retirement).
 
 **Tests:**
-- No test framework is configured. First priorities when adding tests:
-  - Unit tests for retirement subtype auto-classification logic (server.js `RETIREMENT_SUBTYPES` set)
-  - Unit tests for the trend data carry-forward SQL CTE (or an integration test against a test DB)
-  - Auth middleware / session expiry behaviour
+- Integration test suite exists in `test/` (security + data accuracy, run via `npm test`). Remaining priorities:
+  - Unit tests for retirement subtype auto-classification (`RETIREMENT_SUBTYPES` in server.js) — requires extracting the logic or mocking Plaid's token exchange
+  - Plaid refresh flow (`refreshBalances` Plaid path) with a mocked Plaid client, including `ITEM_LOGIN_REQUIRED` handling
+  - Browser/UI tests with Playwright (login flow, dashboard renders totals, granularity toggle)
+  - Run tests in CI on PRs (GitHub Actions + Postgres service container)
