@@ -83,9 +83,6 @@ Requires `.env` with: `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV`, `DATABASE_
 
 ## Backlog
 
-**Pending promotion to production:**
-- Run `node migrations/010_add_account_category.js` against the production DB before or immediately after deploying the retirement feature. The migration is idempotent and safe to re-run.
-
 **Manual retirement account form:**
 - No UI exists yet for adding a manual (non-Plaid) retirement account. Currently requires using `npm run db:add-snapshot` directly. A form on `connect.html` or a dedicated page should include: account name, institution, account type (401k/IRA/RRSP/etc.), currency (CAD/USD), and category toggle (Liquid/Retirement).
 
