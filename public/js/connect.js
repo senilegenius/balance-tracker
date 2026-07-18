@@ -40,12 +40,16 @@ function renderPlaidInstitutions(accounts) {
                 plaid_item_id:  acc.plaid_item_id || null,
                 login_required: false,
                 sync_paused:    false,
+                sync_paused_at: null,
                 accounts: [],
             });
         }
         const g = groups.get(acc.institution_name);
         if (acc.login_required) g.login_required = true;
-        if (acc.sync_paused) g.sync_paused = true;
+        if (acc.sync_paused) {
+            g.sync_paused = true;
+            g.sync_paused_at = acc.sync_paused_at || null;
+        }
         g.accounts.push(acc);
     });
 
@@ -72,6 +76,7 @@ function renderManualAccounts(accounts) {
                 plaid_item_id:  null,
                 login_required: false,
                 sync_paused:    false,
+                sync_paused_at: null,
                 accounts: [],
             });
         }
@@ -110,7 +115,10 @@ function buildInstitutionGroup(institutionName, info) {
     // syncing resumes.
     let badgeHtml;
     if (info.sync_paused) {
-        badgeHtml = '<span class="sync-paused-badge">Sync paused — manual updates</span>';
+        const since = info.sync_paused_at
+            ? ` since ${new Date(info.sync_paused_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}`
+            : '';
+        badgeHtml = `<span class="sync-paused-badge">Sync paused${since} — manual updates</span>`;
     } else if (info.login_required) {
         badgeHtml = '<span class="login-required-badge">Login required</span>';
     } else {

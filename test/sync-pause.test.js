@@ -86,6 +86,7 @@ describe('pausing Plaid sync for an item', () => {
     const chequing = res.body.find(a => a.id === plaidAccount);
     assert.equal(chequing.sync_paused, true);
     assert.equal(chequing.is_plaid_connected, true);
+    assert.ok(chequing.sync_paused_at, 'sync_paused_at should be set while paused');
   });
 
   it('paused accounts respect the category filter', async () => {
@@ -116,6 +117,14 @@ describe('pausing Plaid sync for an item', () => {
 
     const res = await agent.get('/api/manual_accounts');
     assert.deepEqual(res.body.map(a => a.account_name), ['RRSP']);
+  });
+
+  it('records an audit event for each pause/resume transition', async () => {
+    const events = await pool.query(
+      'SELECT action FROM sync_events WHERE plaid_item_id = $1 ORDER BY id',
+      [item.id]
+    );
+    assert.deepEqual(events.rows.map(e => e.action), ['paused', 'resumed']);
   });
 
   it('rejects bad input and unknown items', async () => {

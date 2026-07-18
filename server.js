@@ -369,7 +369,12 @@ app.get('/api/accounts', async (req, res) => {
         (a.plaid_account_id IS NOT NULL) AS is_plaid_connected,
         pi.plaid_item_id,
         COALESCE(pi.login_required, false) AS login_required,
-        COALESCE(pi.sync_paused, false) AS sync_paused
+        COALESCE(pi.sync_paused, false) AS sync_paused,
+        (
+          SELECT MAX(se.created_at)
+          FROM sync_events se
+          WHERE se.plaid_item_id = pi.id AND se.action = 'paused'
+        ) AS sync_paused_at
       FROM accounts a
       LEFT JOIN plaid_items pi ON a.plaid_item_id = pi.id
       ORDER BY a.institution_name, a.account_name
@@ -1231,20 +1236,37 @@ app.post('/api/set_sync_paused', async (req, res) => {
     return res.status(400).json({ error: 'plaid_item_id and sync_paused (boolean) are required' });
   }
 
+  const client = await pool.connect();
   try {
-    const result = await pool.query(
-      'UPDATE plaid_items SET sync_paused = $2 WHERE plaid_item_id = $1 RETURNING id',
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      'UPDATE plaid_items SET sync_paused = $2 WHERE plaid_item_id = $1 RETURNING id, institution_name',
       [plaid_item_id, sync_paused]
     );
 
     if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Item not found' });
     }
 
+    // Audit trail — lets us answer "when was this paused / which balance
+    // history was manual?" long after the fact
+    await client.query(
+      'INSERT INTO sync_events (plaid_item_id, action) VALUES ($1, $2)',
+      [result.rows[0].id, sync_paused ? 'paused' : 'resumed']
+    );
+
+    await client.query('COMMIT');
+
+    console.log(`🔁 Plaid sync ${sync_paused ? 'paused' : 'resumed'} for ${result.rows[0].institution_name} (item ${plaid_item_id})`);
     res.json({ success: true, sync_paused });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error setting sync_paused:', error);
     res.status(500).json({ error: 'Failed to update sync setting' });
+  } finally {
+    client.release();
   }
 });
 
