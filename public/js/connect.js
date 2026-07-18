@@ -116,9 +116,9 @@ function buildInstitutionGroup(institutionName, info) {
     let badgeHtml;
     if (info.sync_paused) {
         const since = info.sync_paused_at
-            ? ` since ${new Date(info.sync_paused_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}`
+            ? ` since ${new Date(info.sync_paused_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })}`
             : '';
-        badgeHtml = `<span class="sync-paused-badge">Sync paused${since} — manual updates</span>`;
+        badgeHtml = `<span class="sync-paused-badge">Paused${since} - manual updates</span>`;
     } else if (info.login_required) {
         badgeHtml = '<span class="login-required-badge">Login required</span>';
     } else {
