@@ -46,16 +46,33 @@ async function seedAccount(pool, {
   isLiability = false,
   isActive = true,
   plaidAccountId = null,
+  plaidItemId = null,
 }) {
   const result = await pool.query(
     `INSERT INTO accounts
        (institution_name, account_name, account_type, account_category,
-        currency, is_liability, is_active, plaid_account_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        currency, is_liability, is_active, plaid_account_id, plaid_item_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING id`,
-    [institution, name, type, category, currency, isLiability, isActive, plaidAccountId]
+    [institution, name, type, category, currency, isLiability, isActive, plaidAccountId, plaidItemId]
   );
   return result.rows[0].id;
+}
+
+// Seeds a plaid_items row (no access token, so refreshBalances never calls
+// Plaid for it). Returns { id, plaidItemId } — id is the FK for accounts.
+async function seedPlaidItem(pool, {
+  institution = 'Test Bank',
+  plaidItemId = 'test-item-1',
+  syncPaused = false,
+} = {}) {
+  const result = await pool.query(
+    `INSERT INTO plaid_items (institution_name, plaid_item_id, sync_paused)
+     VALUES ($1, $2, $3)
+     RETURNING id`,
+    [institution, plaidItemId, syncPaused]
+  );
+  return { id: result.rows[0].id, plaidItemId };
 }
 
 async function seedSnapshot(pool, accountId, balance, date, rate = 1.35) {
@@ -81,6 +98,7 @@ module.exports = {
   seedUser,
   seedExchangeRate,
   seedAccount,
+  seedPlaidItem,
   seedSnapshot,
   daysAgo,
 };

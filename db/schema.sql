@@ -34,6 +34,7 @@ CREATE TABLE plaid_items (
   plaid_item_id VARCHAR(100) UNIQUE,
   access_token_encrypted BYTEA,  -- Encrypted access token
   login_required BOOLEAN NOT NULL DEFAULT false,
+  sync_paused BOOLEAN NOT NULL DEFAULT false,  -- Skip Plaid refresh; accounts updated manually
   created_at TIMESTAMP DEFAULT NOW()
 );
 

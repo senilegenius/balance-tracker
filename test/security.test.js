@@ -44,6 +44,7 @@ describe('unauthenticated access is blocked', () => {
     '/api/create_link_token',
     '/api/create_link_token_update',
     '/api/clear_item_error',
+    '/api/set_sync_paused',
     '/api/exchange_public_token',
   ];
 
