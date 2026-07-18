@@ -368,7 +368,13 @@ app.get('/api/accounts', async (req, res) => {
         a.is_active,
         (a.plaid_account_id IS NOT NULL) AS is_plaid_connected,
         pi.plaid_item_id,
-        COALESCE(pi.login_required, false) AS login_required
+        COALESCE(pi.login_required, false) AS login_required,
+        COALESCE(pi.sync_paused, false) AS sync_paused,
+        (
+          SELECT MAX(se.created_at)
+          FROM sync_events se
+          WHERE se.plaid_item_id = pi.id AND se.action = 'paused'
+        ) AS sync_paused_at
       FROM accounts a
       LEFT JOIN plaid_items pi ON a.plaid_item_id = pi.id
       ORDER BY a.institution_name, a.account_name
@@ -381,7 +387,8 @@ app.get('/api/accounts', async (req, res) => {
   }
 });
 
-// Get manual accounts (accounts without plaid_account_id) with their last balances.
+// Get manually-updated accounts with their last balances: accounts with no
+// Plaid connection, plus Plaid accounts whose item has sync_paused set.
 // Accepts optional ?category=retirement (or 'liquid') to filter by account_category.
 app.get('/api/manual_accounts', async (req, res) => {
   try {
@@ -409,7 +416,8 @@ app.get('/api/manual_accounts', async (req, res) => {
           LIMIT 1
         ) as last_balance
       FROM accounts a
-      WHERE a.plaid_account_id IS NULL
+      LEFT JOIN plaid_items pi ON a.plaid_item_id = pi.id
+      WHERE (a.plaid_account_id IS NULL OR pi.sync_paused = true)
         AND a.is_active = true
         ${categoryFilter}
       ORDER BY a.institution_name, a.account_name
@@ -1219,6 +1227,49 @@ app.post('/api/clear_item_error', async (req, res) => {
   }
 });
 
+// Pause or resume Plaid syncing for an item. While paused, the item is
+// skipped during balance refreshes and its accounts appear in the manual
+// update flow instead. The access token is kept so syncing can resume later.
+app.post('/api/set_sync_paused', async (req, res) => {
+  const { plaid_item_id, sync_paused } = req.body;
+  if (!plaid_item_id || typeof sync_paused !== 'boolean') {
+    return res.status(400).json({ error: 'plaid_item_id and sync_paused (boolean) are required' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      'UPDATE plaid_items SET sync_paused = $2 WHERE plaid_item_id = $1 RETURNING id, institution_name',
+      [plaid_item_id, sync_paused]
+    );
+
+    if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    // Audit trail — lets us answer "when was this paused / which balance
+    // history was manual?" long after the fact
+    await client.query(
+      'INSERT INTO sync_events (plaid_item_id, action) VALUES ($1, $2)',
+      [result.rows[0].id, sync_paused ? 'paused' : 'resumed']
+    );
+
+    await client.query('COMMIT');
+
+    console.log(`🔁 Plaid sync ${sync_paused ? 'paused' : 'resumed'} for ${result.rows[0].institution_name} (item ${plaid_item_id})`);
+    res.json({ success: true, sync_paused });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error setting sync_paused:', error);
+    res.status(500).json({ error: 'Failed to update sync setting' });
+  } finally {
+    client.release();
+  }
+});
+
 // Exchange public token for access token and save to database
 app.post('/api/exchange_public_token', async (req, res) => {
   const { public_token } = req.body;
@@ -1372,6 +1423,7 @@ async function refreshBalances({ manualBalances = {}, date = null, category = nu
         SELECT id, plaid_item_id, access_token_encrypted
         FROM plaid_items
         WHERE access_token_encrypted IS NOT NULL
+          AND sync_paused = false
       `);
 
       console.log(`\n🔄 Refreshing balances for ${itemsResult.rows.length} Plaid items...`);
@@ -1551,6 +1603,7 @@ app.listen(PORT, () => {
   console.log('   GET  /api/summary - Calculated summary');
   console.log('   GET  /api/trend_data - Data for trend chart');
   console.log('   GET  /api/account_history/:id - Individual account history');
+  console.log('   POST /api/set_sync_paused - Pause/resume Plaid syncing for an item');
   console.log('   POST /api/refresh_balances - Update from Plaid and manual accounts\n');
   console.log('📄 Pages:');
   console.log('   http://localhost:3000 - Main Dashboard');

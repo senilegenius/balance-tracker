@@ -56,6 +56,7 @@ Monolithic Node.js (Express 5) app with vanilla JS frontend. Single `server.js` 
 - Liabilities/credit cards stored as negative balances
 - `accounts.is_active` used for soft-delete
 - `accounts.plaid_account_id` is NULL for manual (non-Plaid) accounts
+- `plaid_items.sync_paused` pauses Plaid refresh for an item (e.g. broken bank MFA); its accounts are treated as manually-updated until resumed (toggled from connect.html via `POST /api/set_sync_paused`); each pause/resume transition is recorded in `sync_events`
 
 **Key business logic:**
 - `/api/trend_data` uses SQL WITH clauses to generate a complete daily date series with carry-forward for missing balances, then aggregates by granularity (daily/weekly/monthly)

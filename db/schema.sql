@@ -1,6 +1,7 @@
 -- Drop existing tables if they exist (for clean start)
 DROP TABLE IF EXISTS balance_snapshots CASCADE;
 DROP TABLE IF EXISTS accounts CASCADE;
+DROP TABLE IF EXISTS sync_events CASCADE;
 DROP TABLE IF EXISTS plaid_items CASCADE;
 DROP TABLE IF EXISTS exchange_rates CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
@@ -34,6 +35,15 @@ CREATE TABLE plaid_items (
   plaid_item_id VARCHAR(100) UNIQUE,
   access_token_encrypted BYTEA,  -- Encrypted access token
   login_required BOOLEAN NOT NULL DEFAULT false,
+  sync_paused BOOLEAN NOT NULL DEFAULT false,  -- Skip Plaid refresh; accounts updated manually
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Table: sync_events (audit trail of pause/resume transitions per item)
+CREATE TABLE sync_events (
+  id SERIAL PRIMARY KEY,
+  plaid_item_id INTEGER REFERENCES plaid_items(id),
+  action VARCHAR(10) NOT NULL,  -- 'paused' | 'resumed'
   created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -80,6 +90,7 @@ CREATE INDEX idx_balance_snapshots_account_date ON balance_snapshots(account_id,
 CREATE INDEX idx_accounts_institution ON accounts(institution_name);
 CREATE INDEX idx_accounts_active ON accounts(is_active);
 CREATE INDEX idx_accounts_category ON accounts(account_category);
+CREATE INDEX idx_sync_events_item ON sync_events(plaid_item_id);
 CREATE INDEX idx_exchange_rates_currencies ON exchange_rates(from_currency, to_currency);
 
 -- Helper functions for encrypting/decrypting access tokens

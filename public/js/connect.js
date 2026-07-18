@@ -39,11 +39,17 @@ function renderPlaidInstitutions(accounts) {
             groups.set(acc.institution_name, {
                 plaid_item_id:  acc.plaid_item_id || null,
                 login_required: false,
+                sync_paused:    false,
+                sync_paused_at: null,
                 accounts: [],
             });
         }
         const g = groups.get(acc.institution_name);
         if (acc.login_required) g.login_required = true;
+        if (acc.sync_paused) {
+            g.sync_paused = true;
+            g.sync_paused_at = acc.sync_paused_at || null;
+        }
         g.accounts.push(acc);
     });
 
@@ -69,6 +75,8 @@ function renderManualAccounts(accounts) {
             groups.set(acc.institution_name, {
                 plaid_item_id:  null,
                 login_required: false,
+                sync_paused:    false,
+                sync_paused_at: null,
                 accounts: [],
             });
         }
@@ -102,26 +110,45 @@ function buildInstitutionGroup(institutionName, info) {
     const countLabel = `${info.accounts.length} account${info.accounts.length !== 1 ? 's' : ''}`;
     const chevronId  = `chevron-${institutionName.replace(/\s+/g, '-')}`;
 
+    // Badge priority: paused > login required > account count.
+    // While paused, the fix button is hidden — re-auth only matters once
+    // syncing resumes.
+    let badgeHtml;
+    if (info.sync_paused) {
+        const since = info.sync_paused_at
+            ? ` since ${new Date(info.sync_paused_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })}`
+            : '';
+        badgeHtml = `<span class="sync-paused-badge">Paused${since} - manual updates</span>`;
+    } else if (info.login_required) {
+        badgeHtml = '<span class="login-required-badge">Login required</span>';
+    } else {
+        badgeHtml = `<span class="account-count-badge">${countLabel}</span>`;
+    }
+
     header.innerHTML = `
         <div class="institution-header-left">
             <span class="institution-name">${institutionName}</span>
         </div>
         <div class="institution-header-right">
-            ${info.login_required
-                ? '<span class="login-required-badge">Login required</span>'
-                : `<span class="account-count-badge">${countLabel}</span>`}
-            ${info.login_required && info.plaid_item_id
+            ${badgeHtml}
+            ${info.login_required && !info.sync_paused && info.plaid_item_id
                 ? `<button class="fix-button"
                        data-item-id="${info.plaid_item_id}"
                        data-institution="${institutionName}">Fix connection</button>`
+                : ''}
+            ${info.plaid_item_id
+                ? `<button class="sync-toggle-button"
+                       data-item-id="${info.plaid_item_id}"
+                       data-paused="${info.sync_paused}">${info.sync_paused ? 'Resume sync' : 'Pause sync'}</button>`
                 : ''}
             <span class="chevron" id="${chevronId}">▼</span>
         </div>
     `;
 
-    // Toggle expansion on header click (but not on the fix button)
+    // Toggle expansion on header click (but not on the buttons)
     header.addEventListener('click', e => {
         if (e.target.classList.contains('fix-button')) return;
+        if (e.target.classList.contains('sync-toggle-button')) return;
         const body    = group.querySelector('.institution-accounts');
         const chevron = group.querySelector('.chevron');
         const isOpen  = !body.classList.contains('collapsed');
@@ -134,6 +161,14 @@ function buildInstitutionGroup(institutionName, info) {
     if (fixBtn) {
         fixBtn.addEventListener('click', () => {
             initializePlaidUpdateMode(fixBtn.dataset.itemId, fixBtn.dataset.institution, fixBtn);
+        });
+    }
+
+    // ── Pause/resume sync button handler ─────────────────────────────────
+    const syncBtn = header.querySelector('.sync-toggle-button');
+    if (syncBtn) {
+        syncBtn.addEventListener('click', () => {
+            toggleSyncPaused(syncBtn.dataset.itemId, syncBtn.dataset.paused !== 'true', syncBtn);
         });
     }
 
@@ -178,6 +213,34 @@ function buildAccountRow(acc) {
     `;
 
     return row;
+}
+
+// ─── Pause/resume Plaid sync ───────────────────────────────────────────────
+
+async function toggleSyncPaused(plaidItemId, pause, btn) {
+    const confirmMsg = pause
+        ? 'Pause Plaid syncing for this institution? Its accounts will be updated manually via the Refresh flow until you resume.'
+        : 'Resume Plaid syncing for this institution? Its accounts will be updated automatically again.';
+    if (!confirm(confirmMsg)) return;
+
+    btn.disabled = true;
+
+    try {
+        const response = await fetch('/api/set_sync_paused', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ plaid_item_id: plaidItemId, sync_paused: pause }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to update sync setting');
+
+        loadConnectedBanks();
+    } catch (error) {
+        console.error('Error toggling sync:', error);
+        alert('Error: ' + error.message);
+        btn.disabled = false;
+    }
 }
 
 // ─── Plaid update mode ─────────────────────────────────────────────────────
