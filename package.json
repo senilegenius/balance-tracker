@@ -45,6 +45,6 @@
     "plaid": "^47.0.0"
   },
   "devDependencies": {
-    "supertest": "^7.3.0"
+    "supertest": "^7.3.1"
   }
 }
