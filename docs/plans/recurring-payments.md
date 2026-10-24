@@ -144,8 +144,9 @@ the range, and a buffer.
    For example: school fees, a loan payment and the internet bill all
    due the Monday after payday.
 
-Buffer for v1: a query param, defaulting to a constant in `server.js`, with an
-input on the page. Whether it should be stored server-side is an open question.
+Buffer: entered on the page, defaulting to **$1,000**. It's sent as the `buffer`
+query param and is not stored server-side. The default lives in one constant,
+`DEFAULT_CHECKING_BUFFER`, in `server.js`.
 
 Worked example (fictional numbers; also the Phase 2 test fixture): balance $3,000,
 next inflow Fri the 30th. Outflows through the 30th = loan $300 + insurance $100 +
@@ -217,12 +218,15 @@ release flow. **Migrations are applied by hand: to sandbox before merge, to prod
   next period. The model already supports this. It's mostly UI on top of
   `checkingTarget`.
 
-## Open questions
+## Decisions (2026-10-23)
 
-1. **Buffer:** what's a comfortable default cushion ($250? $500?), and should it
-   be stored server-side or just entered on the page?
-2. **Irregular school fees:** are they predictable enough to model (e.g. annual
-   or termly), or should they be entered as one-off payments when known?
-3. **Debit days:** confirm the usual debit day for bills whose posting date wanders.
-4. **Multiple checking accounts:** is there only one checking account to plan for? v1 assumes
-   one account is chosen on the page, with a dropdown if there are more.
+1. **Buffer:** default $1,000, entered on the page, not stored server-side.
+2. **School fees:** fairly regular. The pattern is to be worked out together from
+   the last year of school-fee transactions, then modelled as recurring
+   payment(s) (e.g. monthly + termly/annual) instead of one-offs.
+3. **Debit days:** confirmed bill by bill with the user before entering the real
+   data. This affects the data entered and each payment's `weekend_rule`, not the design.
+4. **Checking accounts:** there's only one today. v1 plans for a single checking
+   account and has **no account dropdown**. The page uses the one active
+   checking account. `recurring_payments.account_id` and the `account_id` query
+   param stay, so a second account can be added later without a migration.
