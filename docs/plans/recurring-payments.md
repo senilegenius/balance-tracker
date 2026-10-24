@@ -46,6 +46,10 @@ CREATE TABLE recurring_payments (
   amount_max DECIMAL(15, 2),               -- optional worst case for variable bills (e.g. a mobile bill)
   frequency VARCHAR(12) NOT NULL,          -- 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'annual' | 'once'
   anchor_date DATE NOT NULL,               -- a known occurrence; the schedule is projected from it
+  day_of_month SMALLINT,                   -- monthly/quarterly/annual: 1..31, or -1 = last day, -2 = second-last, ...
+                                           --   NULL = use the anchor's day
+  active_months SMALLINT[],                -- months the payment happens in (1–12); NULL = every month
+                                           --   e.g. tuition Sep–Jul = {1,2,3,4,5,6,7,9,10,11,12}
   weekend_rule VARCHAR(10) NOT NULL DEFAULT 'next',   -- 'next' | 'previous' | 'none'
   start_date DATE,                         -- NULL = active since anchor
   end_date DATE,                           -- NULL = open-ended; set to stop (childcare paused)
@@ -57,7 +61,9 @@ CREATE TABLE recurring_payments (
   CONSTRAINT chk_rp_direction CHECK (direction IN ('outflow', 'inflow')),
   CONSTRAINT chk_rp_frequency CHECK (frequency IN ('weekly','biweekly','monthly','quarterly','annual','once')),
   CONSTRAINT chk_rp_weekend   CHECK (weekend_rule IN ('next','previous','none')),
-  CONSTRAINT chk_rp_amount    CHECK (amount >= 0 AND (amount_max IS NULL OR amount_max >= amount))
+  CONSTRAINT chk_rp_amount    CHECK (amount >= 0 AND (amount_max IS NULL OR amount_max >= amount)),
+  CONSTRAINT chk_rp_dom       CHECK (day_of_month IS NULL OR day_of_month BETWEEN 1 AND 31 OR day_of_month BETWEEN -7 AND -1),
+  CONSTRAINT chk_rp_months    CHECK (active_months IS NULL OR active_months <@ ARRAY[1,2,3,4,5,6,7,8,9,10,11,12]::SMALLINT[])
 );
 
 -- One-off changes to a single occurrence: move it, change its amount, or skip it.
@@ -74,6 +80,13 @@ CREATE TABLE recurring_payment_overrides (
   created_at TIMESTAMP DEFAULT NOW(),
   UNIQUE (recurring_payment_id, scheduled_date)
 );
+
+-- App-wide settings edited from the UI (first key: checking_buffer).
+CREATE TABLE app_settings (
+  key VARCHAR(50) PRIMARY KEY,
+  value JSONB NOT NULL,
+  updated_at TIMESTAMP DEFAULT NOW()
+);
 ```
 
 **Design decisions**
@@ -84,10 +97,21 @@ CREATE TABLE recurring_payment_overrides (
 - **Starting and stopping payments.** Childcare is added with a `start_date` and stopped by
   setting `end_date`. The row stays, so it can be restarted later by clearing
   `end_date` or setting a new start. Deleting a payment is a soft delete.
-- **Projecting from an anchor date.** Monthly payments keep the anchor's day of month,
-  moved to the month's last day when needed (31st → Feb 28). Annual payments keep
+- **Projecting from an anchor date.** Monthly payments use `day_of_month` (or the
+  anchor's day), moved to the month's last day when needed (31st → Feb 28).
+  Negative values count back from the end of the month. Some bills follow the
+  billing cycle rather than a calendar date. Telus Mobility, for example,
+  posts on the second-last day of the month (`day_of_month = -2`). Annual payments keep
   the anchor's month and day. Weekly and biweekly payments step 7 or 14 days from
   the anchor, so the mortgage stays on its Friday cycle.
+- **Months the payment happens in.** `active_months` skips months, e.g. tuition
+  Sep–Jul with no August payment. It's combined with `start_date` / `end_date`
+  for the school year, so next year's amount can be a new row or an edit to the
+  amount when it's announced.
+- **Variable amounts.** `amount` is the typical bill and `amount_max` the worst
+  case used by the checking target. When the actual bill arrives, an override sets
+  that month's amount (e.g. a one-time $270 charge on a phone bill). When the
+  plan itself changes, editing `amount` changes every future month.
 - **Weekend rule.** Each payment has its own rule. The observed data supports
   `next` as the default: monthly debits due on a Saturday or Sunday come out
   the following Monday. Statutory holidays are
@@ -105,7 +129,7 @@ tested this way).
 expandOccurrences(payment, overrides, fromDate, toDate)
   // → [{ payment_id, name, direction, category, scheduled_date, date, amount, amount_max, overridden, skipped }]
 monthlyEquivalent(payment)
-  // weekly ×52/12, biweekly ×26/12, monthly ×1, quarterly ÷3, annual ÷12, once → 0
+  // weekly ×52/12, biweekly ×26/12, monthly ×(active months ÷ 12), quarterly ÷3, annual ÷12, once → 0
 checkingTarget({ balance, occurrences, today, buffer })
   // → see "Checking target" below
 ```
@@ -126,7 +150,8 @@ checkingTarget({ balance, occurrences, today, buffer })
 | `PUT /api/recurring_payments/:id/overrides/:scheduledDate` | Add or replace a one-off override (amount, date, skip) |
 | `DELETE /api/recurring_payments/:id/overrides/:scheduledDate` | Remove an override |
 | `GET /api/upcoming_payments?from=&to=&account_id=` | Occurrences in the range (default: today + 30 days), sorted, each with a projected running balance |
-| `GET /api/checking_target?account_id=&buffer=` | The checking target (below) |
+| `GET /api/checking_target?account_id=&buffer=` | The checking target (below). `buffer` defaults to the saved setting |
+| `GET /api/settings` / `PUT /api/settings/:key` | Read and save app settings (`checking_buffer`) |
 
 ## Checking target
 
@@ -144,9 +169,10 @@ the range, and a buffer.
    For example: school fees, a loan payment and the internet bill all
    due the Monday after payday.
 
-Buffer: entered on the page, defaulting to **$1,000**. It's sent as the `buffer`
-query param and is not stored server-side. The default lives in one constant,
-`DEFAULT_CHECKING_BUFFER`, in `server.js`.
+Buffer: edited on the page and **saved in `app_settings`**, so it's the same on
+every device and for both of you. It starts at **$1,000**
+(`DEFAULT_CHECKING_BUFFER` in `server.js`, used until a value is saved). The
+`buffer` query param allows a one-time what-if without saving it.
 
 Worked example (fictional numbers; also the Phase 2 test fixture): balance $3,000,
 next inflow Fri the 30th. Outflows through the 30th = loan $300 + insurance $100 +
@@ -220,10 +246,10 @@ release flow. **Migrations are applied by hand: to sandbox before merge, to prod
 
 ## Decisions (2026-10-23)
 
-1. **Buffer:** default $1,000, entered on the page, not stored server-side.
-2. **School fees:** fairly regular. The pattern is to be worked out together from
-   the last year of school-fee transactions, then modelled as recurring
-   payment(s) (e.g. monthly + termly/annual) instead of one-offs.
+1. **Buffer:** default $1,000, edited on the page, saved in the database (`app_settings`).
+2. **School fees:** tuition is modelled as a monthly payment on the 1st with
+   `active_months` = Sep–Jul and `start_date` / `end_date` set to the school year.
+   Separate yearly items (deposit, spring fee) are still to be confirmed.
 3. **Debit days:** confirmed bill by bill with the user before entering the real
    data. This affects the data entered and each payment's `weekend_rule`, not the design.
 4. **Checking accounts:** there's only one today. v1 plans for a single checking
