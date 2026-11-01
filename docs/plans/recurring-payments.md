@@ -105,13 +105,17 @@ CREATE TABLE app_settings (
   the anchor's month and day. Weekly and biweekly payments step 7 or 14 days from
   the anchor, so the mortgage stays on its Friday cycle.
 - **Months the payment happens in.** `active_months` skips months, e.g. tuition
-  Sep–Jul with no August payment. It's combined with `start_date` / `end_date`
-  for the school year, so next year's amount can be a new row or an edit to the
-  amount when it's announced.
+  Sep–Jul with no August payment. It's open-ended: when the fee changes, edit
+  `amount`. `start_date` / `end_date` are still there if a payment should stop.
 - **Variable amounts.** `amount` is the typical bill and `amount_max` the worst
   case used by the checking target. When the actual bill arrives, an override sets
   that month's amount (e.g. a one-time $270 charge on a phone bill). When the
   plan itself changes, editing `amount` changes every future month.
+- **Bills that drift.** Some bills post anywhere in a short window (e.g. the
+  3rd–6th) with no calendar rule that fits. Model them on the **earliest** day.
+  The checking target then sets the money aside early. If the bill actually
+  posts a few days later, nothing goes wrong: the money just sits in checking a
+  little longer.
 - **Weekend rule.** Each payment has its own rule. The observed data supports
   `next` as the default: monthly debits due on a Saturday or Sunday come out
   the following Monday. Statutory holidays are
@@ -248,10 +252,12 @@ release flow. **Migrations are applied by hand: to sandbox before merge, to prod
 
 1. **Buffer:** default $1,000, edited on the page, saved in the database (`app_settings`).
 2. **School fees:** tuition is modelled as a monthly payment on the 1st with
-   `active_months` = Sep–Jul and `start_date` / `end_date` set to the school year.
-   Separate yearly items (deposit, spring fee) are still to be confirmed.
+   `active_months` = Sep–Jul and no end date. The amount is edited when the fee
+   changes. Deposits, uniforms, lunch orders and other extras aren't tracked.
 3. **Debit days:** confirmed bill by bill with the user before entering the real
-   data. This affects the data entered and each payment's `weekend_rule`, not the design.
+   data. This affects the data entered and each payment's `weekend_rule`, not the
+   design. It led to two additions: `day_of_month` counting back from month end
+   (a bill on the second-last day) and the earliest-day rule for drifting bills.
 4. **Checking accounts:** there's only one today. v1 plans for a single checking
    account and has **no account dropdown**. The page uses the one active
    checking account. `recurring_payments.account_id` and the `account_id` query
