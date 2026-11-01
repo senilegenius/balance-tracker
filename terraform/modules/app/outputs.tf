@@ -1,5 +1,5 @@
 output "api_gateway_url" {
-  description = "Public URL for the app (API Gateway invoke URL)"
+  description = "API Gateway invoke URL (disabled when custom_domain is set — use app_url)"
   value       = aws_apigatewayv2_stage.default.invoke_url
 }
 
