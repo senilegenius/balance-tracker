@@ -58,7 +58,9 @@ app.use(cors({
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      const err = new Error('Not allowed by CORS');
+      err.status = 403;
+      callback(err);
     }
   },
   credentials: true
@@ -201,6 +203,25 @@ function requireAuthPage(req, res, next) {
 // AUTHENTICATION ENDPOINTS
 // ===========================================
 
+// Security audit trail: one JSON line per login attempt, searchable in
+// CloudWatch with `filter @message like /"event":"login"/`.
+// Never pass the password here. Username is attacker-controlled, so truncate.
+function logLoginAttempt(req, outcome) {
+  const entry = {
+    event: 'login',
+    outcome,
+    username: typeof req.body?.username === 'string' ? req.body.username.slice(0, 100) : null,
+    ip: req.ip,
+    userAgent: (req.get('user-agent') || '').slice(0, 200),
+  };
+  const line = JSON.stringify(entry);
+  if (outcome === 'success') {
+    console.log(line);
+  } else {
+    console.warn(line);
+  }
+}
+
 // Security: Rate limiting for login endpoint
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -208,6 +229,10 @@ const loginLimiter = rateLimit({
   message: 'Too many login attempts, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
+  handler: (req, res, next, options) => {
+    logLoginAttempt(req, 'rate_limited');
+    res.status(options.statusCode).send(options.message);
+  },
 });
 
 // Login endpoint
@@ -216,6 +241,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
+      logLoginAttempt(req, 'missing_credentials');
       return res.status(400).json({ error: 'Username and password required' });
     }
 
@@ -226,7 +252,10 @@ app.post('/api/login', loginLimiter, async (req, res) => {
       WHERE username = $1
     `, [username]);
 
+    // Logs distinguish unknown_user from bad_password (shows whether an
+    // attacker knows a real username); the response does not.
     if (result.rows.length === 0) {
+      logLoginAttempt(req, 'unknown_user');
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
@@ -236,6 +265,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     const isValid = await bcrypt.compare(password, user.password_hash);
 
     if (!isValid) {
+      logLoginAttempt(req, 'bad_password');
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
@@ -243,9 +273,11 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     req.session.userId = user.id;
     req.session.username = user.username;
 
+    logLoginAttempt(req, 'success');
     res.json({ success: true, username: user.username });
 
   } catch (error) {
+    logLoginAttempt(req, 'error');
     console.error('Login error:', error);
     res.status(500).json({ error: 'An error occurred during login' });
   }
@@ -1582,6 +1614,29 @@ app.post('/api/refresh_balances', async (req, res) => {
     console.error('Error refreshing balances:', error);
     res.status(500).json({ error: 'Failed to refresh balances' });
   }
+});
+
+// ===========================================
+// FALLBACK HANDLERS
+// ===========================================
+// These must stay last. Without them, unmatched requests and errors fall
+// through to Express's built-in finalhandler, which crashes under
+// serverless-express ("ee.on is not a function") and turns every bot probe
+// (/.env, POST /xmlrpc.php, bad CORS origin) into a 500.
+
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
+app.use((err, req, res, next) => {
+  if (res.headersSent) {
+    return next(err);
+  }
+  const status = err.status || err.statusCode || 500;
+  if (status >= 500) {
+    console.error('Unhandled error:', err);
+  }
+  res.status(status).json({ error: status >= 500 ? 'Internal server error' : (err.expose ? err.message : 'Request rejected') });
 });
 
 // ===========================================

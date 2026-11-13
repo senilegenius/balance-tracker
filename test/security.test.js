@@ -4,7 +4,7 @@
 // Note on X-Forwarded-For: the app sets `trust proxy`, and the login rate
 // limiter buckets by client IP. Each test group uses a distinct fake IP so
 // rate-limit state from one group can't bleed into another.
-const { describe, it, before, after } = require('node:test');
+const { describe, it, before, after, mock } = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
 
@@ -156,6 +156,71 @@ describe('login endpoint', () => {
     }
 
     assert.equal(lastStatus, 429, 'sixth attempt should be rate limited');
+  });
+});
+
+describe('login audit log', () => {
+  // Capture console output for the duration of fn; returns parsed login events
+  // plus the raw text (to check that secrets never reach the logs).
+  async function captureLogs(fn) {
+    const lines = [];
+    const record = (...args) => lines.push(args.map(String).join(' '));
+    const logMock = mock.method(console, 'log', record);
+    const warnMock = mock.method(console, 'warn', record);
+    try {
+      await fn();
+    } finally {
+      logMock.mock.restore();
+      warnMock.mock.restore();
+    }
+    const events = lines
+      .filter(l => l.includes('"event":"login"'))
+      .map(l => JSON.parse(l));
+    return { events, raw: lines.join('\n') };
+  }
+
+  it('records each outcome with the client IP', async () => {
+    const { events } = await captureLogs(async () => {
+      await request(app).post('/api/login').set('X-Forwarded-For', '10.4.0.1')
+        .send({ username: 'no-such-user', password: 'x' });
+      await request(app).post('/api/login').set('X-Forwarded-For', '10.4.0.2')
+        .send({ username: db.TEST_USER.username, password: 'wrong-password' });
+      await request(app).post('/api/login').set('X-Forwarded-For', '10.4.0.3')
+        .send({ username: db.TEST_USER.username });
+      await request(app).post('/api/login').set('X-Forwarded-For', '10.4.0.4')
+        .send(db.TEST_USER);
+    });
+
+    assert.deepEqual(
+      events.map(e => [e.outcome, e.ip]),
+      [
+        ['unknown_user', '10.4.0.1'],
+        ['bad_password', '10.4.0.2'],
+        ['missing_credentials', '10.4.0.3'],
+        ['success', '10.4.0.4'],
+      ]
+    );
+    assert.equal(events[1].username, db.TEST_USER.username);
+  });
+
+  it('records rate-limited attempts', async () => {
+    const { events } = await captureLogs(async () => {
+      for (let i = 0; i < 6; i++) {
+        await request(app).post('/api/login').set('X-Forwarded-For', '10.4.1.1')
+          .send({ username: db.TEST_USER.username, password: `guess-${i}` });
+      }
+    });
+    assert.equal(events.at(-1).outcome, 'rate_limited');
+  });
+
+  it('never logs the password', async () => {
+    const secret = 'super-secret-password-do-not-log';
+    const { events, raw } = await captureLogs(async () => {
+      await request(app).post('/api/login').set('X-Forwarded-For', '10.4.2.1')
+        .send({ username: db.TEST_USER.username, password: secret });
+    });
+    assert.equal(events.length, 1);
+    assert.ok(!raw.includes(secret), 'password leaked into logs');
   });
 });
 
