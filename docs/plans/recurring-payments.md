@@ -44,7 +44,7 @@ CREATE TABLE recurring_payments (
   category VARCHAR(20) NOT NULL DEFAULT 'must_have',  -- 'must_have' | 'discretionary' | 'income'
   amount DECIMAL(15, 2) NOT NULL,          -- expected amount, always positive
   amount_max DECIMAL(15, 2),               -- optional worst case for variable bills (e.g. a mobile bill)
-  frequency VARCHAR(12) NOT NULL,          -- 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'annual' | 'once'
+  frequency VARCHAR(12) NOT NULL,          -- 'weekly' | 'biweekly' | 'monthly' | 'bimonthly' | 'quarterly' | 'annual' | 'once'
   anchor_date DATE NOT NULL,               -- a known occurrence; the schedule is projected from it
   day_of_month SMALLINT,                   -- monthly/quarterly/annual: 1..31, or -1 = last day, -2 = second-last, ...
                                            --   NULL = use the anchor's day
@@ -59,7 +59,7 @@ CREATE TABLE recurring_payments (
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
   CONSTRAINT chk_rp_direction CHECK (direction IN ('outflow', 'inflow')),
-  CONSTRAINT chk_rp_frequency CHECK (frequency IN ('weekly','biweekly','monthly','quarterly','annual','once')),
+  CONSTRAINT chk_rp_frequency CHECK (frequency IN ('weekly','biweekly','monthly','bimonthly','quarterly','annual','once')),
   CONSTRAINT chk_rp_weekend   CHECK (weekend_rule IN ('next','previous','none')),
   CONSTRAINT chk_rp_amount    CHECK (amount >= 0 AND (amount_max IS NULL OR amount_max >= amount)),
   CONSTRAINT chk_rp_dom       CHECK (day_of_month IS NULL OR day_of_month BETWEEN 1 AND 31 OR day_of_month BETWEEN -7 AND -1),
@@ -111,6 +111,10 @@ CREATE TABLE app_settings (
   case used by the checking target. When the actual bill arrives, an override sets
   that month's amount (e.g. a one-time $270 charge on a phone bill). When the
   plan itself changes, editing `amount` changes every future month.
+- **Seasonal bills.** Hydro costs roughly 2–3× as much in winter as in summer,
+  and switched from every two months to monthly in mid-2026. For v1, set
+  `amount_max` to the winter level and override individual months when the bill
+  is known. If that becomes tedious, a later version can add amounts by month.
 - **Bills that drift.** Some bills post anywhere in a short window (e.g. the
   3rd–6th) with no calendar rule that fits. Model them on the **earliest** day.
   The checking target then sets the money aside early. If the bill actually
@@ -133,7 +137,7 @@ tested this way).
 expandOccurrences(payment, overrides, fromDate, toDate)
   // → [{ payment_id, name, direction, category, scheduled_date, date, amount, amount_max, overridden, skipped }]
 monthlyEquivalent(payment)
-  // weekly ×52/12, biweekly ×26/12, monthly ×(active months ÷ 12), quarterly ÷3, annual ÷12, once → 0
+  // weekly ×52/12, biweekly ×26/12, monthly ×(active months ÷ 12), bimonthly ÷2, quarterly ÷3, annual ÷12, once → 0
 checkingTarget({ balance, occurrences, today, buffer })
   // → see "Checking target" below
 ```
