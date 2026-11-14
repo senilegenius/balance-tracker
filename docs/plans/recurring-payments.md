@@ -123,7 +123,12 @@ CREATE TABLE app_settings (
 - **Weekend rule.** Each payment has its own rule. The observed data supports
   `next` as the default: monthly debits due on a Saturday or Sunday come out
   the following Monday. Statutory holidays are
-  **not** handled in v1, because the data shows payments posting on BC Day anyway.
+  **not** handled in v1. Some debits ignore them (BC Day) and others move
+  (Victoria Day), but a holiday only ever delays a debit. Because the target
+  sets money aside by the scheduled date, a holiday never causes a shortfall.
+- **Annual renewals.** Insurance premiums change once a year at renewal, and the
+  renewal month can bring a one-off debit on a different date. Edit the amount
+  and override that single debit. A renewal reminder could come later.
 - **Positive amounts plus `direction`.** Clearer than signed amounts. Snapshots stay
   signed as they are today.
 
