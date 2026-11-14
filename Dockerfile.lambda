@@ -10,6 +10,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 COPY server.js lambda.js ./
+COPY lib/ ./lib/
 COPY public/ ./public/
 COPY db/ ./db/
 COPY certs/ ./certs/

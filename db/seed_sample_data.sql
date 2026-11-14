@@ -170,3 +170,19 @@ INSERT INTO balance_snapshots (account_id, balance, date, usd_to_cad_rate) VALUE
   (10,  149800.00, '2026-02-15', 1.4400),  -- ~$215,712 CAD
   (11,   82100.00, '2026-02-15', NULL),     -- CAD
   (12,   47300.00, '2026-02-15', NULL);     -- CAD
+
+-- ─── Recurring payments (Chequing, account id 1) ─────────────────────────────
+-- Cleared above by TRUNCATE accounts ... CASCADE
+INSERT INTO recurring_payments
+  (name, account_id, direction, category, amount, amount_max, frequency, anchor_date, day_of_month, active_months, weekend_rule, end_date, notes)
+VALUES
+  ('Mortgage',        1, 'outflow', 'must_have',     2400.00, NULL,   'biweekly',  '2026-01-09', NULL, NULL,                            'next', NULL,         NULL),
+  ('Car loan',        1, 'outflow', 'must_have',      310.00, NULL,   'monthly',   '2026-01-17', NULL, NULL,                            'next', NULL,         NULL),
+  ('Hydro',           1, 'outflow', 'must_have',      180.00, 400.00, 'monthly',   '2026-01-15', NULL, NULL,                            'next', NULL,         'Higher in winter'),
+  ('Phone',           1, 'outflow', 'must_have',      150.00, 175.00, 'monthly',   '2026-01-30', -2,   NULL,                            'next', NULL,         'Second-last day of the month'),
+  ('Internet',        1, 'outflow', 'must_have',       95.00, NULL,   'monthly',   '2026-01-03', NULL, NULL,                            'next', NULL,         NULL),
+  ('Tuition',         1, 'outflow', 'must_have',     1100.00, NULL,   'monthly',   '2025-09-01', NULL, '{1,2,3,4,5,6,7,9,10,11,12}',    'next', NULL,         'Sep–Jul'),
+  ('Property tax',    1, 'outflow', 'must_have',     5200.00, NULL,   'annual',    '2025-07-02', NULL, NULL,                            'next', NULL,         NULL),
+  ('Streaming',       1, 'outflow', 'discretionary',   22.00, NULL,   'monthly',   '2026-01-08', NULL, NULL,                            'none', NULL,         NULL),
+  ('Summer camp',     1, 'outflow', 'must_have',      350.00, NULL,   'weekly',    '2025-07-07', NULL, NULL,                            'none', '2025-08-29', 'Restart next summer'),
+  ('Paycheque',       1, 'inflow',  'income',        3600.00, NULL,   'biweekly',  '2026-01-09', NULL, NULL,                            'none', NULL,         NULL);

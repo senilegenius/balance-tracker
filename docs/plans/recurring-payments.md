@@ -225,7 +225,7 @@ The starting list (derived from real checking history) is kept locally, outside 
 Each phase ships on its own branch → PR → sandbox → tag, following the existing
 release flow. **Migrations are applied by hand: to sandbox before merge, to prod before tag.**
 
-**Phase 1: Recurring payments list (data + CRUD)**
+**Phase 1: Recurring payments list (data + CRUD)** — built on `feature/recurring-payments-phase1`. The overrides and settings tables are created now; their endpoints come in Phase 2.
 - Migration, schema, RLS, test helper updates
 - `lib/schedule.js` with `expandOccurrences` + `monthlyEquivalent`, plus unit tests
   (month-end clamping, weekend rules, biweekly anchor stepping backwards and

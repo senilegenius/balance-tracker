@@ -9,6 +9,9 @@ ALTER TABLE exchange_rates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE plaid_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE session ENABLE ROW LEVEL SECURITY;
+ALTER TABLE recurring_payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE recurring_payment_overrides ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
 
 -- Create policies that allow postgres user full access
 -- The postgres user is what the application uses for direct database connections
@@ -45,6 +48,24 @@ CREATE POLICY "Allow postgres full access" ON users
   WITH CHECK (true);
 
 CREATE POLICY "Allow postgres full access" ON session
+  FOR ALL
+  TO postgres
+  USING (true)
+  WITH CHECK (true);
+
+CREATE POLICY "Allow postgres full access" ON recurring_payments
+  FOR ALL
+  TO postgres
+  USING (true)
+  WITH CHECK (true);
+
+CREATE POLICY "Allow postgres full access" ON recurring_payment_overrides
+  FOR ALL
+  TO postgres
+  USING (true)
+  WITH CHECK (true);
+
+CREATE POLICY "Allow postgres full access" ON app_settings
   FOR ALL
   TO postgres
   USING (true)
