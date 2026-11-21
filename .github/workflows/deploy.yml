@@ -96,7 +96,10 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build --platform linux/amd64 -f Dockerfile.lambda \
+          # Lambda rejects images with attestation manifests, which newer
+          # Docker adds by default, so build a plain single-platform image.
+          docker build --platform linux/amd64 --provenance=false --sbom=false \
+            -f Dockerfile.lambda \
             -t $ECR_REGISTRY/balance-tracker:$IMAGE_TAG \
             -t $ECR_REGISTRY/balance-tracker:latest \
             .
@@ -147,7 +150,10 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.ref_name }}
         run: |
-          docker build --platform linux/amd64 -f Dockerfile.lambda \
+          # Lambda rejects images with attestation manifests, which newer
+          # Docker adds by default, so build a plain single-platform image.
+          docker build --platform linux/amd64 --provenance=false --sbom=false \
+            -f Dockerfile.lambda \
             -t $ECR_REGISTRY/balance-tracker:$IMAGE_TAG \
             -t $ECR_REGISTRY/balance-tracker:latest \
             .
