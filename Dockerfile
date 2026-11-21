@@ -15,6 +15,7 @@ WORKDIR /app
 
 COPY --from=build /app/node_modules ./node_modules
 COPY server.js ./
+COPY lib/ ./lib/
 COPY public/ ./public/
 COPY db/ ./db/
 COPY package.json ./

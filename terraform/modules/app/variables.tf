@@ -23,6 +23,11 @@ variable "ecr_repository_url" {
 
 # ── Application config ────────────────────────────────────────────────────────
 
+variable "app_tz" {
+  description = "IANA time zone used for \"today\" in payment schedules (APP_TZ), e.g. America/New_York"
+  type        = string
+}
+
 variable "plaid_env" {
   description = "Plaid environment (sandbox or production)"
   type        = string

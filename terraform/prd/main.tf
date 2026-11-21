@@ -65,6 +65,7 @@ module "app" {
   aws_region         = var.aws_region
   ecr_repository_url = var.ecr_repository_url
   plaid_env          = var.plaid_env
+  app_tz             = var.app_tz
   node_env           = var.node_env
   allowed_origin     = var.allowed_origin
   refresh_schedule   = var.refresh_schedule

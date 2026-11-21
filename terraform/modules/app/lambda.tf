@@ -59,6 +59,7 @@ resource "aws_lambda_function" "app" {
     variables = {
       NODE_ENV             = var.node_env
       PLAID_ENV            = var.plaid_env
+      APP_TZ               = var.app_tz
       ALLOWED_ORIGIN       = local.allowed_origin
       DATABASE_URL         = var.database_url
       PLAID_CLIENT_ID      = var.plaid_client_id

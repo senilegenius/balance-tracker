@@ -36,6 +36,7 @@ describe('unauthenticated access is blocked', () => {
     '/api/retirement_balances',
     '/api/retirement_summary',
     '/api/retirement_trend_data',
+    '/api/recurring_payments',
   ];
 
   const protectedPosts = [
@@ -46,6 +47,7 @@ describe('unauthenticated access is blocked', () => {
     '/api/clear_item_error',
     '/api/set_sync_paused',
     '/api/exchange_public_token',
+    '/api/recurring_payments',
   ];
 
   for (const path of protectedGets) {
@@ -62,8 +64,13 @@ describe('unauthenticated access is blocked', () => {
     });
   }
 
+  it('PUT and DELETE /api/recurring_payments/:id return 401 without a session', async () => {
+    assert.equal((await request(app).put('/api/recurring_payments/1').send({})).status, 401);
+    assert.equal((await request(app).delete('/api/recurring_payments/1')).status, 401);
+  });
+
   it('protected HTML pages redirect to login', async () => {
-    for (const page of ['/', '/index.html', '/connect.html']) {
+    for (const page of ['/', '/index.html', '/connect.html', '/retirement.html', '/payments.html']) {
       const res = await request(app).get(page);
       assert.equal(res.status, 302, `${page} should redirect`);
       assert.equal(res.headers.location, '/login.html');

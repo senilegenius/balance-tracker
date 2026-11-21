@@ -2,7 +2,7 @@
 require('dotenv').config();
 
 // Fail fast if required environment variables are missing
-const requiredEnvVars = ['DATABASE_URL', 'SESSION_SECRET', 'DB_ENCRYPTION_KEY', 'PLAID_CLIENT_ID', 'PLAID_SECRET'];
+const requiredEnvVars = ['DATABASE_URL', 'SESSION_SECRET', 'DB_ENCRYPTION_KEY', 'PLAID_CLIENT_ID', 'PLAID_SECRET', 'APP_TZ'];
 for (const envVar of requiredEnvVars) {
   if (!process.env[envVar]) {
     throw new Error(`Required environment variable missing: ${envVar}`);
@@ -19,6 +19,10 @@ const cors = require('cors');
 const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid');
 const pg = require('pg');
 const { Pool } = pg;
+const schedule = require('./lib/schedule');
+if (!schedule.isValidTimeZone(process.env.APP_TZ)) {
+  throw new Error(`APP_TZ is not a valid IANA time zone: ${process.env.APP_TZ}`);
+}
 
 // Return DATE columns as plain "YYYY-MM-DD" strings instead of Date objects
 // This prevents timezone-dependent date shifting when serialized to JSON
@@ -107,6 +111,8 @@ app.use(session({
 app.get('/', requireAuthPage);
 app.get('/index.html', requireAuthPage);
 app.get('/connect.html', requireAuthPage);
+app.get('/retirement.html', requireAuthPage);
+app.get('/payments.html', requireAuthPage);
 
 // Serve static files
 app.use(express.static('public'));
@@ -1185,6 +1191,271 @@ app.get('/api/retirement_trend_data', async (req, res) => {
 });
 
 // ===========================================
+// RECURRING PAYMENTS ENDPOINTS
+// ===========================================
+
+const RECURRING_PAYMENT_COLUMNS = `
+  rp.id, rp.name, rp.account_id, a.account_name, rp.direction, rp.category,
+  rp.amount, rp.amount_max, rp.frequency, rp.anchor_date, rp.day_of_month,
+  rp.active_months, rp.weekend_rule, rp.start_date, rp.end_date,
+  rp.payee_match, rp.notes, rp.created_at, rp.updated_at
+`;
+
+// Validates and normalises a create/update body. Returns { error } or { value }
+// with every column set, so PUT replaces the whole rule.
+async function validateRecurringPayment(body) {
+  const b = body || {};
+  const name = typeof b.name === 'string' ? b.name.trim() : '';
+  if (!name || name.length > 100) {
+    return { error: 'name is required (max 100 characters)' };
+  }
+
+  const direction = b.direction ?? 'outflow';
+  if (!schedule.DIRECTIONS.includes(direction)) {
+    return { error: `direction must be one of: ${schedule.DIRECTIONS.join(', ')}` };
+  }
+
+  const category = b.category ?? (direction === 'inflow' ? 'income' : 'must_have');
+  if (!schedule.CATEGORIES.includes(category)) {
+    return { error: `category must be one of: ${schedule.CATEGORIES.join(', ')}` };
+  }
+
+  if (!schedule.FREQUENCIES.includes(b.frequency)) {
+    return { error: `frequency must be one of: ${schedule.FREQUENCIES.join(', ')}` };
+  }
+
+  const amount = Number(b.amount);
+  if (b.amount === null || b.amount === '' || !Number.isFinite(amount) || amount < 0) {
+    return { error: 'amount must be a number >= 0' };
+  }
+
+  let amountMax = null;
+  if (b.amount_max !== undefined && b.amount_max !== null && b.amount_max !== '') {
+    amountMax = Number(b.amount_max);
+    if (!Number.isFinite(amountMax) || amountMax < amount) {
+      return { error: 'amount_max must be a number >= amount' };
+    }
+  }
+
+  if (!schedule.isValidDate(b.anchor_date)) {
+    return { error: 'anchor_date must be a valid YYYY-MM-DD date' };
+  }
+
+  let dayOfMonth = null;
+  if (b.day_of_month !== undefined && b.day_of_month !== null && b.day_of_month !== '') {
+    dayOfMonth = Number(b.day_of_month);
+    const inRange = Number.isInteger(dayOfMonth) &&
+      ((dayOfMonth >= 1 && dayOfMonth <= 31) || (dayOfMonth >= -7 && dayOfMonth <= -1));
+    if (!inRange) {
+      return { error: 'day_of_month must be 1-31, or -1 (last day) to -7' };
+    }
+    if (['weekly', 'biweekly', 'once'].includes(b.frequency)) {
+      return { error: `day_of_month does not apply to ${b.frequency} payments` };
+    }
+  }
+
+  let activeMonths = null;
+  if (Array.isArray(b.active_months) && b.active_months.length > 0) {
+    const months = [...new Set(b.active_months.map(Number))].sort((x, y) => x - y);
+    if (!months.every(m => Number.isInteger(m) && m >= 1 && m <= 12)) {
+      return { error: 'active_months must contain month numbers 1-12' };
+    }
+    activeMonths = months.length === 12 ? null : months;
+  } else if (b.active_months !== undefined && b.active_months !== null && !Array.isArray(b.active_months)) {
+    return { error: 'active_months must be an array of month numbers' };
+  }
+
+  const weekendRule = b.weekend_rule ?? 'next';
+  if (!schedule.WEEKEND_RULES.includes(weekendRule)) {
+    return { error: `weekend_rule must be one of: ${schedule.WEEKEND_RULES.join(', ')}` };
+  }
+
+  const startDate = b.start_date || null;
+  const endDate = b.end_date || null;
+  if (startDate && !schedule.isValidDate(startDate)) {
+    return { error: 'start_date must be a valid YYYY-MM-DD date' };
+  }
+  if (endDate && !schedule.isValidDate(endDate)) {
+    return { error: 'end_date must be a valid YYYY-MM-DD date' };
+  }
+  if (endDate && endDate < (startDate || b.anchor_date)) {
+    return { error: 'end_date must be on or after the start date' };
+  }
+
+  let accountId = null;
+  if (b.account_id !== undefined && b.account_id !== null && b.account_id !== '') {
+    accountId = Number(b.account_id);
+    const account = Number.isInteger(accountId)
+      ? await pool.query('SELECT 1 FROM accounts WHERE id = $1 AND is_active = true', [accountId])
+      : { rows: [] };
+    if (account.rows.length === 0) {
+      return { error: 'account_id must be an active account' };
+    }
+  }
+
+  const payeeMatch = typeof b.payee_match === 'string' && b.payee_match.trim() ? b.payee_match.trim() : null;
+  if (payeeMatch && payeeMatch.length > 100) {
+    return { error: 'payee_match must be at most 100 characters' };
+  }
+  const notes = typeof b.notes === 'string' && b.notes.trim() ? b.notes.trim() : null;
+
+  return {
+    value: {
+      name, account_id: accountId, direction, category, amount, amount_max: amountMax,
+      frequency: b.frequency, anchor_date: b.anchor_date, day_of_month: dayOfMonth,
+      active_months: activeMonths, weekend_rule: weekendRule, start_date: startDate,
+      end_date: endDate, payee_match: payeeMatch, notes,
+    },
+  };
+}
+
+function recurringPaymentParams(v) {
+  return [
+    v.name, v.account_id, v.direction, v.category, v.amount, v.amount_max,
+    v.frequency, v.anchor_date, v.day_of_month, v.active_months, v.weekend_rule,
+    v.start_date, v.end_date, v.payee_match, v.notes,
+  ];
+}
+
+// Adds the derived fields the UI needs: status, monthly equivalent and the
+// next occurrence (with any override applied).
+function describeRecurringPayment(row, overrides, today) {
+  const next = schedule.nextOccurrence(row, overrides, today);
+  return {
+    ...row,
+    amount: Number(row.amount),
+    amount_max: row.amount_max == null ? null : Number(row.amount_max),
+    status: schedule.paymentStatus(row, today),
+    monthly_equivalent: schedule.monthlyEquivalent(row),
+    next_date: next ? next.date : null,
+    next_amount: next ? next.amount : null,
+  };
+}
+
+async function loadRecurringPayments({ id = null } = {}) {
+  const result = await pool.query(`
+    SELECT ${RECURRING_PAYMENT_COLUMNS}
+    FROM recurring_payments rp
+    LEFT JOIN accounts a ON a.id = rp.account_id
+    WHERE rp.is_active = true AND ($1::int IS NULL OR rp.id = $1)
+    ORDER BY rp.direction DESC, rp.name
+  `, [id]);
+
+  const overrides = await pool.query(`
+    SELECT recurring_payment_id, scheduled_date, override_date, override_amount, skipped
+    FROM recurring_payment_overrides
+    WHERE ($1::int IS NULL OR recurring_payment_id = $1)
+  `, [id]);
+  const overridesById = new Map();
+  for (const o of overrides.rows) {
+    if (!overridesById.has(o.recurring_payment_id)) overridesById.set(o.recurring_payment_id, []);
+    overridesById.get(o.recurring_payment_id).push(o);
+  }
+
+  const today = schedule.todayLocal();
+  return result.rows.map(row => describeRecurringPayment(row, overridesById.get(row.id) || [], today));
+}
+
+function parseIdParam(req, res) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: 'Invalid id' });
+    return null;
+  }
+  return id;
+}
+
+app.get('/api/recurring_payments', async (req, res) => {
+  try {
+    const payments = await loadRecurringPayments();
+
+    // Monthly totals only count payments that are currently running
+    const totals = { must_have: 0, discretionary: 0, income: 0 };
+    for (const p of payments) {
+      if (p.status === 'active') totals[p.category] += p.monthly_equivalent;
+    }
+    for (const key of Object.keys(totals)) totals[key] = Math.round(totals[key] * 100) / 100;
+    totals.net = Math.round((totals.income - totals.must_have - totals.discretionary) * 100) / 100;
+
+    res.json({ payments, monthly_totals: totals });
+  } catch (error) {
+    console.error('Error fetching recurring payments:', error);
+    res.status(500).json({ error: 'Failed to fetch recurring payments' });
+  }
+});
+
+app.post('/api/recurring_payments', async (req, res) => {
+  try {
+    const { error, value } = await validateRecurringPayment(req.body);
+    if (error) return res.status(400).json({ error });
+
+    const result = await pool.query(`
+      INSERT INTO recurring_payments
+        (name, account_id, direction, category, amount, amount_max, frequency,
+         anchor_date, day_of_month, active_months, weekend_rule, start_date,
+         end_date, payee_match, notes)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      RETURNING id
+    `, recurringPaymentParams(value));
+
+    const [payment] = await loadRecurringPayments({ id: result.rows[0].id });
+    res.status(201).json({ success: true, payment });
+  } catch (error) {
+    console.error('Error creating recurring payment:', error);
+    res.status(500).json({ error: 'Failed to create recurring payment' });
+  }
+});
+
+app.put('/api/recurring_payments/:id', async (req, res) => {
+  const id = parseIdParam(req, res);
+  if (id === null) return;
+  try {
+    const { error, value } = await validateRecurringPayment(req.body);
+    if (error) return res.status(400).json({ error });
+
+    const result = await pool.query(`
+      UPDATE recurring_payments SET
+        name = $1, account_id = $2, direction = $3, category = $4, amount = $5,
+        amount_max = $6, frequency = $7, anchor_date = $8, day_of_month = $9,
+        active_months = $10, weekend_rule = $11, start_date = $12, end_date = $13,
+        payee_match = $14, notes = $15, updated_at = NOW()
+      WHERE id = $16 AND is_active = true
+      RETURNING id
+    `, [...recurringPaymentParams(value), id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Recurring payment not found' });
+    }
+
+    const [payment] = await loadRecurringPayments({ id });
+    res.json({ success: true, payment });
+  } catch (error) {
+    console.error('Error updating recurring payment:', error);
+    res.status(500).json({ error: 'Failed to update recurring payment' });
+  }
+});
+
+// Soft delete, like accounts.is_active. To pause a payment instead (e.g.
+// a seasonal service), set end_date with PUT so it can be restarted later.
+app.delete('/api/recurring_payments/:id', async (req, res) => {
+  const id = parseIdParam(req, res);
+  if (id === null) return;
+  try {
+    const result = await pool.query(
+      'UPDATE recurring_payments SET is_active = false, updated_at = NOW() WHERE id = $1 AND is_active = true RETURNING id',
+      [id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Recurring payment not found' });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting recurring payment:', error);
+    res.status(500).json({ error: 'Failed to delete recurring payment' });
+  }
+});
+
+// ===========================================
 // PLAID API ENDPOINTS
 // ===========================================
 
@@ -1659,9 +1930,11 @@ app.listen(PORT, () => {
   console.log('   GET  /api/trend_data - Data for trend chart');
   console.log('   GET  /api/account_history/:id - Individual account history');
   console.log('   POST /api/set_sync_paused - Pause/resume Plaid syncing for an item');
+  console.log('   GET/POST/PUT/DELETE /api/recurring_payments - Manage recurring payments');
   console.log('   POST /api/refresh_balances - Update from Plaid and manual accounts\n');
   console.log('📄 Pages:');
   console.log('   http://localhost:3000 - Main Dashboard');
-  console.log('   http://localhost:3000/connect.html - Connect Banks\n');
+  console.log('   http://localhost:3000/connect.html - Connect Banks');
+  console.log('   http://localhost:3000/payments.html - Recurring Payments\n');
 });
 }

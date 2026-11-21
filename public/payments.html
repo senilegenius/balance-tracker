@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recurring Payments</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html, body { height: 100%; overflow-x: hidden; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            padding: 20px;
+            overflow-y: auto;
+            color: #2c3e50;
+        }
+
+        .container { max-width: 1400px; margin: 0 auto; }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* ── Tabs ───────────────────────────────────────────────────────── */
+        .page-tabs-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        .page-tabs-row .tabs-left { display: flex; gap: 8px; flex-wrap: wrap; }
+
+        .tab-link {
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            color: #7f8c8d;
+            background: white;
+            border: 1px solid #e0e0e0;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        }
+        .tab-link:hover { background: #f0f0f0; color: #2c3e50; }
+        .tab-link.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .btn-primary:hover { opacity: 0.9; }
+
+        .btn-dark-mode {
+            background: none;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            color: #7f8c8d;
+            line-height: 1;
+        }
+        .btn-dark-mode:hover { background: #f0f0f0; }
+
+        /* ── Summary cards ──────────────────────────────────────────────── */
+        .summary-panel {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .card.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .card-label { font-size: 0.9rem; opacity: 0.8; margin-bottom: 8px; }
+        .card-value { font-size: 1.8rem; font-weight: bold; font-variant-numeric: tabular-nums; }
+        .card-sub { font-size: 0.85rem; opacity: 0.75; margin-top: 6px; }
+        .card:not(.primary) .card-label,
+        .card:not(.primary) .card-sub { color: #7f8c8d; opacity: 1; }
+        .value-negative { color: #e74c3c; }
+
+        /* ── Payment tables ─────────────────────────────────────────────── */
+        .panel {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-bottom: 30px;
+        }
+        .panel h2 { font-size: 1.3rem; margin-bottom: 16px; }
+        .panel h2 span { color: #7f8c8d; font-size: 0.9rem; font-weight: normal; }
+        .panel summary { cursor: pointer; font-size: 1.1rem; font-weight: 600; }
+        .panel details[open] summary { margin-bottom: 16px; }
+
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+        th {
+            text-align: left;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: #7f8c8d;
+            padding: 8px 12px;
+            border-bottom: 2px solid #e0e0e0;
+            white-space: nowrap;
+        }
+        td { padding: 12px; border-bottom: 1px solid #eef0f3; vertical-align: top; }
+        th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        td.actions { text-align: right; white-space: nowrap; }
+        .payment-name { font-weight: 600; }
+        .payment-notes { color: #7f8c8d; font-size: 0.85rem; margin-top: 2px; }
+        .muted { color: #95a5a6; font-size: 0.85rem; }
+        .empty-row td { color: #95a5a6; text-align: center; padding: 24px; }
+
+        .tag {
+            display: inline-block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: #eef0f3;
+            color: #5d6d7e;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+        .tag.scheduled { background: #fff4e0; color: #b9770e; }
+        .tag.discretionary { background: #eaf2fd; color: #2e6db4; }
+
+        .btn-row {
+            padding: 6px 10px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            background: white;
+            color: #2c3e50;
+            margin-left: 4px;
+        }
+        .btn-row:hover { background: #f0f0f0; }
+        .btn-row.danger { color: #c0392b; }
+
+        .status-message { margin-bottom: 16px; color: #c0392b; display: none; }
+
+        /* ── Modal ──────────────────────────────────────────────────────── */
+        .modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .modal.show { display: flex; }
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            max-width: 620px;
+            width: 100%;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 24px;
+            border-radius: 16px 16px 0 0;
+            position: relative;
+        }
+        .modal-header h2 { font-size: 1.3rem; }
+        .modal-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            font-size: 1.3rem;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .modal-body { padding: 24px; overflow-y: auto; flex: 1; }
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+        .modal-btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .modal-btn.cancel { background: #f8f9fa; color: #2c3e50; }
+        .modal-btn.save { background: #667eea; color: white; }
+        .modal-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .modal-error {
+            background: #fdf0f0;
+            border-left: 4px solid #e74c3c;
+            padding: 10px 14px;
+            border-radius: 4px;
+            color: #c0392b;
+            font-size: 0.9rem;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        .form-field { margin-bottom: 16px; }
+        .form-field label, .form-field legend {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 6px;
+            font-size: 0.9rem;
+        }
+        .form-field input, .form-field select, .form-field textarea {
+            width: 100%;
+            padding: 9px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-family: inherit;
+            color: #2c3e50;
+            background: white;
+        }
+        .form-field input:focus, .form-field select:focus, .form-field textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .form-field .field-hint { margin-top: 4px; font-size: 0.8rem; color: #95a5a6; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        fieldset.form-field { border: none; }
+        .month-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+        .month-grid label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-weight: normal;
+            font-size: 0.85rem;
+            margin: 0;
+        }
+        .month-grid input { width: auto; }
+
+        /* ── Responsive ─────────────────────────────────────────────────── */
+        @media (max-width: 900px) {
+            .summary-panel { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 600px) {
+            body { padding: 12px; }
+            h1 { font-size: 1.5rem; }
+            .summary-panel { grid-template-columns: 1fr; }
+            .form-row { grid-template-columns: 1fr; }
+            .month-grid { grid-template-columns: repeat(4, 1fr); }
+            .panel { padding: 16px; }
+
+            /* Tables become one card per payment */
+            thead { display: none; }
+            table, tbody, tr, td { display: block; width: 100%; }
+            tr { padding: 12px 0; border-bottom: 1px solid #eef0f3; }
+            td { border: none; padding: 3px 0; text-align: left; }
+            th.num, td.num, td.actions { text-align: left; }
+            td[data-label]::before {
+                content: attr(data-label);
+                display: inline-block;
+                width: 90px;
+                color: #95a5a6;
+                font-size: 0.8rem;
+            }
+            td.actions { padding-top: 8px; }
+            .btn-row { margin: 0 6px 0 0; }
+            .empty-row td { text-align: center; }
+        }
+        @media (max-width: 600px) {
+            body.dark tr { border-bottom-color: #2e3340; }
+        }
+
+        /* ── Dark mode ──────────────────────────────────────────────────── */
+        body.dark { background: #1a1d23; color: #e8eaf0; }
+        body.dark h1 { color: #e8eaf0; }
+        body.dark .tab-link { background: #252930; border-color: #3a3f50; color: #9aa0b0; box-shadow: none; }
+        body.dark .tab-link:hover { background: #363c4a; color: #e8eaf0; }
+        body.dark .tab-link.active { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-color: transparent; }
+        body.dark .btn-dark-mode { border-color: #3a3f50; color: #9aa0b0; }
+        body.dark .btn-dark-mode:hover { background: #2e3340; }
+        body.dark .card:not(.primary),
+        body.dark .panel { background: #252930; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+        body.dark .card:not(.primary) .card-label,
+        body.dark .card:not(.primary) .card-sub { color: #9aa0b0; }
+        body.dark th { color: #9aa0b0; border-bottom-color: #3a3f50; }
+        body.dark td { border-bottom-color: #2e3340; }
+        body.dark .tag { background: #2e3340; color: #9aa0b0; }
+        body.dark .tag.scheduled { background: #3d3220; color: #f0b44c; }
+        body.dark .tag.discretionary { background: #1f2d40; color: #7fb0f0; }
+        body.dark .btn-row { background: #2e3340; border-color: #3a3f50; color: #e8eaf0; }
+        body.dark .btn-row:hover { background: #363c4a; }
+        body.dark .btn-row.danger { color: #f17070; }
+        body.dark .modal-content { background: #252930; }
+        body.dark .modal-footer { border-top-color: #3a3f50; }
+        body.dark .modal-btn.cancel { background: #2e3340; color: #e8eaf0; }
+        body.dark .form-field input,
+        body.dark .form-field select,
+        body.dark .form-field textarea { background: #2e3340; border-color: #3a3f50; color: #e8eaf0; }
+        body.dark .modal-error { background: #3a2020; color: #f17070; }
+    </style>
+</head>
+<body>
+    <script src="/js/dark-mode.js"></script>
+    <div class="container">
+        <h1>📅 Recurring Payments <button class="btn-dark-mode" id="darkModeToggleBtn" title="Toggle dark mode">🌙</button></h1>
+
+        <div class="page-tabs-row">
+            <div class="tabs-left">
+                <a href="/index.html" class="tab-link">💵 Liquid Cash</a>
+                <a href="/retirement.html" class="tab-link">🏦 Retirement</a>
+                <a href="/payments.html" class="tab-link active">📅 Payments</a>
+            </div>
+            <button class="btn-primary" id="addPaymentBtn">➕ Add Recurring Payment</button>
+        </div>
+
+        <div class="status-message" id="statusMessage"></div>
+
+        <!-- Monthly totals — populated by payments.js -->
+        <div class="summary-panel">
+            <div class="card primary">
+                <div class="card-label">Must-haves per month</div>
+                <div class="card-value" id="totalMustHave">Loading…</div>
+                <div class="card-sub">Averaged over the year</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Discretionary per month</div>
+                <div class="card-value" id="totalDiscretionary">–</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Income per month</div>
+                <div class="card-value" id="totalIncome">–</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Income minus payments</div>
+                <div class="card-value" id="totalNet">–</div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Payments <span>money going out</span></h2>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Schedule</th>
+                            <th>Next</th>
+                            <th class="num">Amount</th>
+                            <th class="num">Per month</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="outflowRows"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Income <span>money coming in</span></h2>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Schedule</th>
+                            <th>Next</th>
+                            <th class="num">Amount</th>
+                            <th class="num">Per month</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="inflowRows"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="panel" id="endedPanel">
+            <details>
+                <summary>Stopped <span class="muted" id="endedCount"></span></summary>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Schedule</th>
+                                <th>Ended</th>
+                                <th class="num">Amount</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="endedRows"></tbody>
+                    </table>
+                </div>
+            </details>
+        </div>
+
+        <!-- Add / edit modal -->
+        <div class="modal" id="paymentModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button class="modal-close" id="closeModalBtn" aria-label="Close">×</button>
+                    <h2 id="modalTitle">Add Recurring Payment</h2>
+                </div>
+                <form class="modal-body" id="paymentForm" novalidate>
+                    <div class="modal-error" id="formError"></div>
+
+                    <div class="form-field">
+                        <label for="fName">Name</label>
+                        <input type="text" id="fName" maxlength="100" placeholder="e.g. Mortgage" autocomplete="off">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label for="fDirection">Type</label>
+                            <select id="fDirection">
+                                <option value="outflow">Payment (money out)</option>
+                                <option value="inflow">Income (money in)</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label for="fCategory">Category</label>
+                            <select id="fCategory">
+                                <option value="must_have">Must-have</option>
+                                <option value="discretionary">Discretionary</option>
+                                <option value="income">Income</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label for="fAmount">Typical amount</label>
+                            <input type="number" id="fAmount" min="0" step="0.01" inputmode="decimal">
+                        </div>
+                        <div class="form-field">
+                            <label for="fAmountMax">Worst case <span class="muted">(optional)</span></label>
+                            <input type="number" id="fAmountMax" min="0" step="0.01" inputmode="decimal">
+                            <div class="field-hint">For bills that vary, e.g. winter heating</div>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label for="fFrequency">How often</label>
+                            <select id="fFrequency">
+                                <option value="monthly">Monthly</option>
+                                <option value="biweekly">Every 2 weeks</option>
+                                <option value="weekly">Weekly</option>
+                                <option value="bimonthly">Every 2 months</option>
+                                <option value="quarterly">Every 3 months</option>
+                                <option value="annual">Yearly</option>
+                                <option value="once">Once</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label for="fAnchorDate">A known payment date</label>
+                            <input type="date" id="fAnchorDate">
+                            <div class="field-hint">Any past or upcoming date it was or will be paid</div>
+                        </div>
+                    </div>
+
+                    <div class="form-row" id="monthlyOptions">
+                        <div class="form-field">
+                            <label for="fDayOfMonth">Day of month</label>
+                            <select id="fDayOfMonth"></select>
+                        </div>
+                        <div class="form-field">
+                            <label for="fWeekendRule">If it falls on a weekend</label>
+                            <select id="fWeekendRule">
+                                <option value="next">Move to Monday</option>
+                                <option value="previous">Move to Friday</option>
+                                <option value="none">Leave as is</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <fieldset class="form-field" id="monthsField">
+                        <legend>Months it's paid in</legend>
+                        <div class="month-grid" id="monthGrid"></div>
+                    </fieldset>
+
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label for="fStartDate">Starts <span class="muted">(optional)</span></label>
+                            <input type="date" id="fStartDate">
+                        </div>
+                        <div class="form-field">
+                            <label for="fEndDate">Stops after <span class="muted">(optional)</span></label>
+                            <input type="date" id="fEndDate">
+                        </div>
+                    </div>
+
+                    <div class="form-field">
+                        <label for="fAccount">Paid from / into</label>
+                        <select id="fAccount"></select>
+                    </div>
+
+                    <div class="form-field">
+                        <label for="fNotes">Notes <span class="muted">(optional)</span></label>
+                        <textarea id="fNotes" rows="2"></textarea>
+                    </div>
+                </form>
+                <div class="modal-footer">
+                    <button class="modal-btn cancel" id="cancelModalBtn" type="button">Cancel</button>
+                    <button class="modal-btn save" id="saveModalBtn" type="button">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/payments.js"></script>
+</body>
+</html>
