@@ -882,6 +882,11 @@
             box-shadow: none;
         }
         body.dark .tab-link:hover { background: #363c4a; color: #e8eaf0; }
+        body.dark .tab-link.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
         body.dark .btn-panel-action {
             background: #252930;
             border-color: #3a3f50;
@@ -939,6 +944,7 @@
             <div class="tabs-left">
                 <a href="/index.html" class="tab-link active">💵 Liquid Cash</a>
                 <a href="/retirement.html" class="tab-link">🏦 Retirement</a>
+                <a href="/payments.html" class="tab-link">📅 Payments</a>
             </div>
             <button class="btn-refresh-all" id="refreshAllBtn">🔄 Refresh All Balances</button>
         </div>

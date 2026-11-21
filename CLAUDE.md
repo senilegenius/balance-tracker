@@ -13,6 +13,14 @@ git push -u origin <branch-name>
 gh pr create ...
 ```
 
+## Local-only files
+
+`docs/plans/` holds local planning notes. It is gitignored and must never be committed.
+
+## Personal details
+
+This repo is public. Never commit anything that identifies the owner: banks, service providers, employer, location (city, province, regional holidays, time zone), or real amounts, dates or debit days. Use made-up names and numbers in tests, sample data and examples. Personal configuration belongs in gitignored env files and `terraform.tfvars`.
+
 ## Commands
 
 - `npm start` — Run the server (Express on port 3000)
@@ -36,7 +44,7 @@ No linter or formatter is configured.
 
 ## Architecture
 
-Monolithic Node.js (Express 5) app with vanilla JS frontend. Single `server.js` file contains all backend logic (~1150 lines). Frontend is static files served from `public/`.
+Monolithic Node.js (Express 5) app with vanilla JS frontend. `server.js` contains all routes and most backend logic (~1950 lines); pure, unit-tested logic lives in `lib/` (currently `lib/schedule.js`). Frontend is static files served from `public/`.
 
 **Backend (`server.js`)**
 - All API routes defined inline (no router modules)
@@ -49,9 +57,11 @@ Monolithic Node.js (Express 5) app with vanilla JS frontend. Single `server.js` 
 - `index.html` + `js/dashboard.js` — Main dashboard with Chart.js trend charts, balance cards, account detail sidebar
 - `login.html` + `js/login.js` — Login form
 - `connect.html` + `js/connect.js` — Plaid Link bank connection flow
+- `payments.html` + `js/payments.js` — Recurring payments list (add/edit/stop/restart/delete, monthly must-have totals)
 
 **Database (`db/schema.sql`)**
 - Core tables: `users`, `plaid_items`, `accounts`, `balance_snapshots`, `exchange_rates`, `session`
+- Recurring payments: `recurring_payments` (schedule rules; soft-delete via `is_active`, pause via `end_date`), `recurring_payment_overrides` (one-off date/amount/skip per occurrence), `app_settings` (key/value, e.g. checking buffer). Added by `db/add_recurring_payments.sql`
 - `balance_snapshots` has UNIQUE constraint on `(account_id, date)` — one balance per account per day
 - Liabilities/credit cards stored as negative balances
 - `accounts.is_active` used for soft-delete
@@ -61,11 +71,12 @@ Monolithic Node.js (Express 5) app with vanilla JS frontend. Single `server.js` 
 **Key business logic:**
 - `/api/trend_data` uses SQL WITH clauses to generate a complete daily date series with carry-forward for missing balances, then aggregates by granularity (daily/weekly/monthly)
 - `/api/refresh_balances` fetches from Plaid, handles liability sign inversion, caches exchange rates per refresh cycle, and upserts via `ON CONFLICT (account_id, date)`
+- Recurring payment schedules are expanded by `lib/schedule.js` (dates as `YYYY-MM-DD` strings, "today" in the `APP_TZ` time zone): monthly `day_of_month` can be negative (count from month end), `active_months` limits months, `weekend_rule` shifts weekend dates. Bills that drift are modelled on their earliest day
 - USD balances are converted to CAD using `exchange_rates` table (auto-refreshed every 24 hours from exchangerate-api.com)
 
 ## Environment
 
-Requires `.env` with: `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV`, `DATABASE_URL`, `DB_ENCRYPTION_KEY`, `SESSION_SECRET`, `ALLOWED_ORIGIN`, `NODE_ENV`
+Requires `.env` with: `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV`, `DATABASE_URL`, `DB_ENCRYPTION_KEY`, `SESSION_SECRET`, `ALLOWED_ORIGIN`, `NODE_ENV`, `APP_TZ` (IANA time zone name)
 
 **Local dev:** PostgreSQL database named `balance_tracker` on localhost. Server runs on port 3000. Docker setup includes Caddy reverse proxy for local HTTPS (`https://localhost`).
 

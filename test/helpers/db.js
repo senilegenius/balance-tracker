@@ -12,7 +12,8 @@ function createPool() {
 
 async function truncateAll(pool) {
   await pool.query(`
-    TRUNCATE balance_snapshots, accounts, sync_events, plaid_items, exchange_rates, users, session
+    TRUNCATE recurring_payment_overrides, recurring_payments, app_settings,
+      balance_snapshots, accounts, sync_events, plaid_items, exchange_rates, users, session
     RESTART IDENTITY CASCADE
   `);
 }

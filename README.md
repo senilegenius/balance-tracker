@@ -52,7 +52,7 @@ Choose your workflow:
    cp .env.example .env
    ```
 
-   Fill in your Plaid credentials, `DB_ENCRYPTION_KEY`, and `SESSION_SECRET`. Keep `DATABASE_URL=postgresql://localhost/balance_tracker` and `ALLOWED_ORIGIN=http://localhost:3000`.
+   Fill in your Plaid credentials, `DB_ENCRYPTION_KEY`, `SESSION_SECRET`, and `APP_TZ` (your IANA time zone, e.g. `America/New_York`). Keep `DATABASE_URL=postgresql://localhost/balance_tracker` and `ALLOWED_ORIGIN=http://localhost:3000`.
 
 3. Set up the database:
 
@@ -87,7 +87,7 @@ Docker Compose runs the app, PostgreSQL, and a Caddy reverse proxy for local HTT
    cp .env.example .env.local
    ```
 
-   Fill in your Plaid credentials, `DB_ENCRYPTION_KEY`, and `SESSION_SECRET`. Set:
+   Fill in your Plaid credentials, `DB_ENCRYPTION_KEY`, `SESSION_SECRET`, and `APP_TZ`. Set:
    - `DATABASE_URL=postgresql://postgres:postgres@localhost:5433/balance_tracker`
    - `ALLOWED_ORIGIN=https://localhost`
 

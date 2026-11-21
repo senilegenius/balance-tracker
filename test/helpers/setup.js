@@ -13,6 +13,7 @@ process.env.PLAID_CLIENT_ID = 'test-plaid-client-id';
 process.env.PLAID_SECRET = 'test-plaid-secret';
 process.env.PLAID_ENV = 'sandbox';
 process.env.ALLOWED_ORIGIN = 'http://localhost:3000';
+process.env.APP_TZ = 'UTC';
 
 if (!process.env.DATABASE_URL.includes('test')) {
   throw new Error(

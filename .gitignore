@@ -46,3 +46,6 @@ terraform/prd/terraform.tfvars
 # Backend config files contain account IDs — use backend.hcl.example as the template.
 terraform/sandbox/backend.hcl
 terraform/prd/backend.hcl
+
+# Local-only planning notes (never committed)
+docs/plans/
