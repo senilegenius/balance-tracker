@@ -76,6 +76,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
+      attestations: write
 
     steps:
       - name: Checkout
@@ -92,6 +93,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and push image to ECR
+        id: build
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
@@ -105,7 +107,23 @@ jobs:
             .
           docker push $ECR_REGISTRY/balance-tracker:$IMAGE_TAG
           docker push $ECR_REGISTRY/balance-tracker:latest
-          echo "IMAGE_URI=$ECR_REGISTRY/balance-tracker:$IMAGE_TAG" >> "$GITHUB_ENV"
+          # Deploy by digest so Lambda runs exactly the image that is attested
+          DIGEST=$(docker inspect --format '{{index .RepoDigests 0}}' $ECR_REGISTRY/balance-tracker:$IMAGE_TAG | cut -d@ -f2)
+          [[ "$DIGEST" == sha256:* ]] || { echo "Could not read pushed image digest"; exit 1; }
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "IMAGE_URI=$ECR_REGISTRY/balance-tracker@$DIGEST" >> "$GITHUB_ENV"
+
+      # Signed SLSA build provenance, stored by GitHub rather than in the
+      # image (Lambda rejects images with attestation manifests). The
+      # subject name leaves out the registry so the AWS account ID stays
+      # out of the public transparency log.
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-name: balance-tracker
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: false
+          create-storage-record: false
 
       - name: Configure AWS credentials for Lambda deploy
         uses: aws-actions/configure-aws-credentials@v4
@@ -130,6 +148,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
+      attestations: write
 
     steps:
       - name: Checkout
@@ -146,6 +165,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and push image to ECR
+        id: build
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.ref_name }}
@@ -159,7 +179,23 @@ jobs:
             .
           docker push $ECR_REGISTRY/balance-tracker:$IMAGE_TAG
           docker push $ECR_REGISTRY/balance-tracker:latest
-          echo "IMAGE_URI=$ECR_REGISTRY/balance-tracker:$IMAGE_TAG" >> "$GITHUB_ENV"
+          # Deploy by digest so Lambda runs exactly the image that is attested
+          DIGEST=$(docker inspect --format '{{index .RepoDigests 0}}' $ECR_REGISTRY/balance-tracker:$IMAGE_TAG | cut -d@ -f2)
+          [[ "$DIGEST" == sha256:* ]] || { echo "Could not read pushed image digest"; exit 1; }
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "IMAGE_URI=$ECR_REGISTRY/balance-tracker@$DIGEST" >> "$GITHUB_ENV"
+
+      # Signed SLSA build provenance, stored by GitHub rather than in the
+      # image (Lambda rejects images with attestation manifests). The
+      # subject name leaves out the registry so the AWS account ID stays
+      # out of the public transparency log.
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-name: balance-tracker
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: false
+          create-storage-record: false
 
       - name: Configure AWS credentials for Lambda deploy
         uses: aws-actions/configure-aws-credentials@v4
